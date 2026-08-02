@@ -28,6 +28,16 @@ Si prefieres usar Python directamente:
 python app.py
 ```
 
+Variables utiles:
+
+```text
+PORT=8765
+HOST=0.0.0.0
+APP_DATA_DIR=data
+SCHOOL_ACCESS_CODE=escuela123
+COOKIE_SECURE=false
+```
+
 ## Acceso
 
 La seccion de asistencia puede usarse sin clave. Panel, participantes, actividades y reportes requieren clave de escuela.
@@ -39,6 +49,67 @@ escuela123
 ```
 
 Para cambiarla, inicia la app definiendo `SCHOOL_ACCESS_CODE` antes de ejecutar `run.ps1` o `app.py`.
+
+## Publicar en linea
+
+La app esta preparada para proveedores como Render o Railway. Usa SQLite, asi que necesitas almacenamiento persistente para no perder la base de datos cuando el servidor reinicie.
+
+### Render
+
+1. Sube estos archivos a GitHub.
+2. En Render crea un **Web Service** conectado al repositorio.
+3. Runtime: Python.
+4. Build command:
+
+```text
+pip install -r requirements.txt
+```
+
+5. Start command:
+
+```text
+python app.py
+```
+
+6. Agrega un Persistent Disk:
+
+```text
+Mount path: /var/data
+```
+
+7. Agrega variables de entorno:
+
+```text
+APP_DATA_DIR=/var/data
+SCHOOL_ACCESS_CODE=tu-clave-segura
+COOKIE_SECURE=true
+```
+
+Render define `PORT` automaticamente.
+
+### Railway
+
+1. Crea un nuevo proyecto desde el repositorio de GitHub.
+2. Agrega un Volume al servicio.
+3. Monta el volume en:
+
+```text
+/var/data
+```
+
+4. Agrega variables:
+
+```text
+APP_DATA_DIR=/var/data
+SCHOOL_ACCESS_CODE=tu-clave-segura
+COOKIE_SECURE=true
+```
+
+Railway tambien define `PORT` automaticamente.
+
+### Uso desde celular
+
+Cuando el proveedor genere una URL HTTPS, abre esa URL desde el celular. Puedes crear un codigo QR con la URL publica de asistencia para que profesores o participantes la abran rapidamente.
 
 ## Reportes disponibles
 

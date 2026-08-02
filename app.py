@@ -16,11 +16,12 @@ from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "participants.sqlite3"
+DATA_DIR = Path(os.environ.get("APP_DATA_DIR", str(BASE_DIR / "data"))).resolve()
+DB_PATH = Path(os.environ.get("DATABASE_PATH", str(DATA_DIR / "participants.sqlite3"))).resolve()
 SCHOOL_ACCESS_CODE = os.environ.get("SCHOOL_ACCESS_CODE", "escuela123")
 SESSION_COOKIE_NAME = "school_session"
 SESSION_TOKEN = secrets.token_urlsafe(32)
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
 
 
 def normalize_name(value: str) -> str:
@@ -45,7 +46,7 @@ def parse_date(value: str, field: str) -> str:
 
 
 def connect() -> sqlite3.Connection:
-    DATA_DIR.mkdir(exist_ok=True)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
@@ -220,18 +221,26 @@ class AppHandler(BaseHTTPRequestHandler):
 
     def send_auth_cookie(self) -> None:
         body = json.dumps({"authenticated": True}, ensure_ascii=False).encode("utf-8")
+        secure_flag = "; Secure" if COOKIE_SECURE else ""
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Set-Cookie", f"{SESSION_COOKIE_NAME}={SESSION_TOKEN}; Path=/; SameSite=Lax")
+        self.send_header(
+            "Set-Cookie",
+            f"{SESSION_COOKIE_NAME}={SESSION_TOKEN}; Path=/; HttpOnly; SameSite=Lax{secure_flag}",
+        )
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def clear_auth_cookie(self) -> None:
         body = json.dumps({"authenticated": False}, ensure_ascii=False).encode("utf-8")
+        secure_flag = "; Secure" if COOKIE_SECURE else ""
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Set-Cookie", f"{SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax")
+        self.send_header(
+            "Set-Cookie",
+            f"{SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure_flag}",
+        )
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -833,10 +842,11 @@ class AppHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     init_db()
-    host = "127.0.0.1"
-    port = 8765
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8765"))
     server = ThreadingHTTPServer((host, port), AppHandler)
-    print(f"Aplicacion lista en http://{host}:{port}")
+    display_host = "127.0.0.1" if host == "0.0.0.0" else host
+    print(f"Aplicacion lista en http://{display_host}:{port}")
     print(f"Base de datos: {DB_PATH}")
     try:
         server.serve_forever()
