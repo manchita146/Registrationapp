@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Registro de Participantes</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Proyecto</p>
+        <h1>Registro de Participantes</h1>
+      </div>
+      <nav class="tabs" aria-label="Secciones">
+        <button class="tab active" data-view="dashboard" data-protected="true">Panel</button>
+        <button class="tab" data-view="participants" data-protected="true">Participantes</button>
+        <button class="tab" data-view="activities" data-protected="true">Actividades</button>
+        <button class="tab" data-view="attendance">Asistencia</button>
+        <button id="schoolAccessButton" type="button" class="access-button">Clave escuela</button>
+        <button class="tab" data-view="reports" data-protected="true">Reportes</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="dashboard" class="view active" data-protected="true">
+        <div class="metrics" id="metrics"></div>
+        <div class="two-column">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Actividades recientes</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ultima asistencia</th>
+                    <th>Actividad</th>
+                    <th>Instrumento</th>
+                    <th>Asistencias</th>
+                  </tr>
+                </thead>
+                <tbody id="recentActivities"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Nuevos por mes</h2>
+            </div>
+            <div id="newByMonth" class="timeline"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="participants" class="view" data-protected="true">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Inscribir participante</h2>
+          </div>
+          <form id="participantForm" class="grid-form">
+            <label>Nombre completo
+              <input name="full_name" required autocomplete="name">
+            </label>
+            <label>Fecha de nacimiento
+              <input name="birth_date" type="date" required>
+            </label>
+            <label>Fecha de inscripcion
+              <input name="registered_at" type="date">
+            </label>
+            <label>Telefono
+              <input name="phone" autocomplete="tel">
+            </label>
+            <label>Correo
+              <input name="email" type="email" autocomplete="email">
+            </label>
+            <label>Barrio / comunidad
+              <input name="neighborhood">
+            </label>
+            <label class="full">Notas
+              <textarea name="notes" rows="2"></textarea>
+            </label>
+            <div class="actions full">
+              <button type="submit" class="primary">Guardar</button>
+              <span id="participantMessage" class="message"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading split">
+            <h2>Participantes</h2>
+            <div class="filters">
+              <input id="participantSearch" placeholder="Buscar nombre">
+              <input id="participantBirthSearch" type="date">
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Nacimiento</th>
+                  <th>Inscripcion</th>
+                  <th>Primera asistencia</th>
+                  <th>Total</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody id="participantRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="activities" class="view" data-protected="true">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Instrumentos</h2>
+          </div>
+          <form id="instrumentForm" class="grid-form">
+            <label>Nombre del instrumento
+              <input name="name" required placeholder="Piano, guitarra, violin">
+            </label>
+            <div class="actions">
+              <button type="submit" class="primary">Agregar</button>
+              <span id="instrumentMessage" class="message"></span>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Instrumento</th>
+                </tr>
+              </thead>
+              <tbody id="instrumentRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Profesores</h2>
+          </div>
+          <form id="teacherForm" class="grid-form">
+            <label>Nombre del profesor
+              <input name="name" required placeholder="Nombre y apellido">
+            </label>
+            <div class="actions">
+              <button type="submit" class="primary">Agregar</button>
+              <span id="teacherMessage" class="message"></span>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Profesor</th>
+                </tr>
+              </thead>
+              <tbody id="teacherRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Nueva actividad</h2>
+          </div>
+          <form id="activityForm" class="grid-form">
+            <label>Nombre
+              <input name="name" required>
+            </label>
+            <label>Instrumento
+              <select name="instrument_id"></select>
+            </label>
+            <label>Profesor
+              <select name="teacher_id"></select>
+            </label>
+            <label>Categoria
+              <input name="category">
+            </label>
+            <label>Lugar
+              <input name="location">
+            </label>
+            <label class="full">Notas
+              <textarea name="notes" rows="2"></textarea>
+            </label>
+            <div class="actions full">
+              <button type="submit" class="primary">Crear</button>
+              <span id="activityMessage" class="message"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading split">
+            <h2>Actividades</h2>
+            <div class="filters">
+              <input id="activitySearch" placeholder="Buscar actividad">
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Actividad</th>
+                  <th>Instrumento</th>
+                  <th>Profesor</th>
+                  <th>Categoria</th>
+                  <th>Lugar</th>
+                  <th>Asistencias</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody id="activityRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="attendance" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Asignar participacion</h2>
+          </div>
+          <form id="attendanceForm" class="grid-form">
+            <label>Buscar participante
+              <input id="attendanceNameSearch" placeholder="Nombre">
+            </label>
+            <label>Fecha de nacimiento
+              <input id="attendanceBirthSearch" type="date">
+            </label>
+            <label>Participante
+              <select name="participant_id" required></select>
+            </label>
+            <label>Actividad
+              <select name="activity_id" required></select>
+            </label>
+            <label>Fecha de asistencia
+              <input name="attended_on" type="date">
+            </label>
+            <label class="full">Notas
+              <input name="notes">
+            </label>
+            <div class="actions full">
+              <button type="submit" class="primary">Registrar asistencia</button>
+              <span id="attendanceMessage" class="message"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Asistencias registradas</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Participante</th>
+                  <th>Nacimiento</th>
+                  <th>Actividad</th>
+                  <th>Instrumento</th>
+                  <th>Profesor</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="reports" class="view" data-protected="true">
+        <section class="panel">
+          <div class="panel-heading split">
+            <h2>Reportes</h2>
+            <div class="filters">
+              <input id="reportFrom" type="date" aria-label="Desde">
+              <input id="reportTo" type="date" aria-label="Hasta">
+              <select id="reportActivity"></select>
+              <button id="exportButton" type="button">Exportar</button>
+            </div>
+          </div>
+          <div class="metrics" id="reportMetrics"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ultima asistencia</th>
+                  <th>Actividad</th>
+                  <th>Instrumento</th>
+                  <th>Profesor</th>
+                  <th>Categoria</th>
+                  <th>Asistencias</th>
+                  <th>Participantes unicos</th>
+                </tr>
+              </thead>
+              <tbody id="reportActivityRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Detalle de participantes</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Nacimiento</th>
+                  <th>Inscripcion</th>
+                  <th>Primera asistencia</th>
+                  <th>Asistencias</th>
+                </tr>
+              </thead>
+              <tbody id="reportParticipantRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
