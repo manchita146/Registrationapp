@@ -326,13 +326,14 @@ function setupForms() {
 
   $("#participantForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const form = event.currentTarget;
     try {
       const result = await api("/api/participants", {
         method: "POST",
-        body: JSON.stringify(formData(event.currentTarget)),
+        body: JSON.stringify(formData(form)),
       });
       setMessage("#participantMessage", result.existing ? "Ya existia; no se duplico." : "Participante guardado.");
-      if (!result.existing) event.currentTarget.reset();
+      if (!result.existing) form.reset();
       await refreshAll();
       toast(result.existing ? "Participante encontrado" : "Participante inscrito");
     } catch (error) {
@@ -342,13 +343,14 @@ function setupForms() {
 
   $("#instrumentForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const form = event.currentTarget;
     try {
       const result = await api("/api/instruments", {
         method: "POST",
-        body: JSON.stringify(formData(event.currentTarget)),
+        body: JSON.stringify(formData(form)),
       });
       setMessage("#instrumentMessage", result.existing ? "Ese instrumento ya existe." : "Instrumento agregado.");
-      if (!result.existing) event.currentTarget.reset();
+      if (!result.existing) form.reset();
       await loadInstruments();
       toast(result.existing ? "Instrumento existente" : "Instrumento agregado");
     } catch (error) {
@@ -358,13 +360,14 @@ function setupForms() {
 
   $("#teacherForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const form = event.currentTarget;
     try {
       const result = await api("/api/teachers", {
         method: "POST",
-        body: JSON.stringify(formData(event.currentTarget)),
+        body: JSON.stringify(formData(form)),
       });
       setMessage("#teacherMessage", result.existing ? "Ese profesor ya existe." : "Profesor agregado.");
-      if (!result.existing) event.currentTarget.reset();
+      if (!result.existing) form.reset();
       await loadTeachers();
       toast(result.existing ? "Profesor existente" : "Profesor agregado");
     } catch (error) {
@@ -374,13 +377,14 @@ function setupForms() {
 
   $("#activityForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const form = event.currentTarget;
     try {
       await api("/api/activities", {
         method: "POST",
-        body: JSON.stringify(formData(event.currentTarget)),
+        body: JSON.stringify(formData(form)),
       });
       setMessage("#activityMessage", "Actividad creada.");
-      event.currentTarget.reset();
+      form.reset();
       await refreshAll();
       toast("Actividad creada");
     } catch (error) {
@@ -390,10 +394,11 @@ function setupForms() {
 
   $("#attendanceForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const form = event.currentTarget;
     try {
       const result = await api("/api/attendance", {
         method: "POST",
-        body: JSON.stringify(formData(event.currentTarget)),
+        body: JSON.stringify(formData(form)),
       });
       setMessage("#attendanceMessage", result.existing ? "Esa asistencia ya estaba registrada." : "Asistencia registrada.");
       await refreshAll();
