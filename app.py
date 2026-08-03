@@ -76,6 +76,9 @@ def init_db() -> None:
                 full_name TEXT NOT NULL,
                 normalized_name TEXT NOT NULL,
                 birth_date TEXT NOT NULL,
+                academic_level TEXT DEFAULT '',
+                guardian_name TEXT DEFAULT '',
+                health_conditions TEXT DEFAULT '',
                 phone TEXT DEFAULT '',
                 email TEXT DEFAULT '',
                 neighborhood TEXT DEFAULT '',
@@ -123,6 +126,9 @@ def init_db() -> None:
         ensure_column(db, "activities", "instrument_id", "INTEGER")
         ensure_column(db, "activities", "teacher_id", "INTEGER")
         ensure_column(db, "attendance", "teacher_id", "INTEGER")
+        ensure_column(db, "participants", "academic_level", "TEXT DEFAULT ''")
+        ensure_column(db, "participants", "guardian_name", "TEXT DEFAULT ''")
+        ensure_column(db, "participants", "health_conditions", "TEXT DEFAULT ''")
 
 
 def ensure_column(db: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
@@ -379,13 +385,28 @@ class AppHandler(BaseHTTPRequestHandler):
             cursor = db.execute(
                 """
                 INSERT INTO participants
-                    (full_name, normalized_name, birth_date, phone, email, neighborhood, notes, registered_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (
+                        full_name,
+                        normalized_name,
+                        birth_date,
+                        academic_level,
+                        guardian_name,
+                        health_conditions,
+                        phone,
+                        email,
+                        neighborhood,
+                        notes,
+                        registered_at
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     full_name,
                     normalized,
                     birth_date,
+                    data.get("academic_level", "").strip(),
+                    data.get("guardian_name", "").strip(),
+                    data.get("health_conditions", "").strip(),
                     data.get("phone", "").strip(),
                     data.get("email", "").strip(),
                     data.get("neighborhood", "").strip(),
@@ -751,6 +772,9 @@ class AppHandler(BaseHTTPRequestHandler):
                     """
                     SELECT p.full_name,
                            p.birth_date,
+                           p.academic_level,
+                           p.guardian_name,
+                           p.health_conditions,
                            p.registered_at,
                            MIN(att.attended_on) AS first_attendance_on,
                            COUNT(att.id) AS attendance_count
