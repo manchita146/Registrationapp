@@ -11,6 +11,34 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
+const academicLevels = [
+  "No escolarizado / No aplica",
+  "Inicial - Maternal",
+  "Inicial - Infantes",
+  "Inicial - Parvulos",
+  "Inicial - Pre-Kinder",
+  "Inicial - Kinder",
+  "Inicial - Pre-Primario",
+  "Primaria - 1ro",
+  "Primaria - 2do",
+  "Primaria - 3ro",
+  "Primaria - 4to",
+  "Primaria - 5to",
+  "Primaria - 6to",
+  "Secundaria - 1ro",
+  "Secundaria - 2do",
+  "Secundaria - 3ro",
+  "Secundaria - 4to",
+  "Secundaria - 5to",
+  "Secundaria - 6to",
+  "Adultos - Alfabetizacion",
+  "Adultos - Primaria",
+  "Adultos - Secundaria / PREPARA",
+  "Educacion laboral / Tecnica",
+  "Universitario",
+  "Bachiller / Egresado",
+];
+
 function formatDate(value) {
   if (!value) return "Sin registro";
   const [year, month, day] = value.slice(0, 10).split("-");
@@ -56,6 +84,11 @@ function metric(label, value) {
   return `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`;
 }
 
+function renderAcademicLevels() {
+  const options = academicLevels.map((level) => `<option value="${level}">${level}</option>`);
+  $('[name="academic_level"]').innerHTML = `<option value="">Seleccionar nivel</option>${options.join("")}`;
+}
+
 function renderMetrics(target, totals) {
   $(target).innerHTML = [
     metric("Participantes inscritos", totals.registered_total || 0),
@@ -98,6 +131,9 @@ function renderParticipants() {
       <tr>
         <td>${participant.full_name}</td>
         <td>${formatDate(participant.birth_date)}</td>
+        <td>${participant.academic_level || "Sin nivel"}</td>
+        <td>${participant.guardian_name || "Sin tutor"}</td>
+        <td>${participant.health_conditions || "Sin registro"}</td>
         <td>${formatDate(participant.registered_at)}</td>
         <td><span class="pill ${statusClass}">${status}</span></td>
         <td>${participant.attendance_count || 0}</td>
@@ -105,7 +141,7 @@ function renderParticipants() {
       </tr>
     `;
   });
-  $("#participantRows").innerHTML = rows.join("") || emptyRow(6, "No hay participantes con esos filtros");
+  $("#participantRows").innerHTML = rows.join("") || emptyRow(9, "No hay participantes con esos filtros");
 }
 
 function renderInstruments() {
@@ -173,6 +209,14 @@ function renderSelects() {
     activityTeacherSelect.innerHTML = `<option value="">Sin profesor</option>${teacherOptions.join("")}`;
   }
   $("#reportActivity").innerHTML = `<option value="">Todas las actividades</option>${activityOptions.join("")}`;
+  const attendanceActivityFilter = $("#attendanceActivityFilter");
+  if (attendanceActivityFilter) {
+    const selected = attendanceActivityFilter.value;
+    attendanceActivityFilter.innerHTML = `<option value="">Todas las actividades</option>${activityOptions.join("")}`;
+    if ([...attendanceActivityFilter.options].some((option) => option.value === selected)) {
+      attendanceActivityFilter.value = selected;
+    }
+  }
 }
 
 function renderReports() {
@@ -195,12 +239,15 @@ function renderReports() {
     <tr>
       <td>${participant.full_name}</td>
       <td>${formatDate(participant.birth_date)}</td>
+      <td>${participant.academic_level || "Sin nivel"}</td>
+      <td>${participant.guardian_name || "Sin tutor"}</td>
+      <td>${participant.health_conditions || "Sin registro"}</td>
       <td>${formatDate(participant.registered_at)}</td>
       <td>${formatDate(participant.first_attendance_on)}</td>
       <td>${participant.attendance_count}</td>
     </tr>
   `);
-  $("#reportParticipantRows").innerHTML = participantRows.join("") || emptyRow(5, "Sin participantes");
+  $("#reportParticipantRows").innerHTML = participantRows.join("") || emptyRow(8, "Sin participantes");
 }
 
 async function loadParticipants() {
@@ -233,7 +280,9 @@ async function loadActivities() {
 }
 
 async function loadAttendance() {
-  state.attendance = await api("/api/attendance");
+  const params = new URLSearchParams();
+  if ($("#attendanceActivityFilter")?.value) params.set("activity_id", $("#attendanceActivityFilter").value);
+  state.attendance = await api(`/api/attendance?${params}`);
   renderAttendance();
 }
 
@@ -427,6 +476,7 @@ function setupFilters() {
       renderSelects();
     });
   });
+  $("#attendanceActivityFilter").addEventListener("input", loadAttendance);
   $("#exportButton").addEventListener("click", () => {
     window.location.href = "/api/export";
   });
@@ -463,6 +513,7 @@ async function init() {
   setupTabs();
   setupForms();
   setupFilters();
+  renderAcademicLevels();
   setDefaultDates();
   await loadAuth();
   await refreshAll();

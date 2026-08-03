@@ -65,8 +65,14 @@
             <label>Fecha de nacimiento
               <input name="birth_date" type="date" required>
             </label>
+            <label>Nivel academico
+              <select name="academic_level"></select>
+            </label>
             <label>Fecha de inscripcion
               <input name="registered_at" type="date">
+            </label>
+            <label>Padre, madre o tutor
+              <input name="guardian_name">
             </label>
             <label>Telefono
               <input name="phone" autocomplete="tel">
@@ -76,6 +82,9 @@
             </label>
             <label>Barrio / comunidad
               <input name="neighborhood">
+            </label>
+            <label class="full">Enfermedades o trastornos de salud que padece
+              <textarea name="health_conditions" rows="2"></textarea>
             </label>
             <label class="full">Notas
               <textarea name="notes" rows="2"></textarea>
@@ -101,6 +110,9 @@
                 <tr>
                   <th>Nombre</th>
                   <th>Nacimiento</th>
+                  <th>Nivel academico</th>
+                  <th>Tutor</th>
+                  <th>Salud</th>
                   <th>Inscripcion</th>
                   <th>Primera asistencia</th>
                   <th>Total</th>
@@ -252,8 +264,11 @@
         </section>
 
         <section class="panel">
-          <div class="panel-heading">
+          <div class="panel-heading split">
             <h2>Asistencias registradas</h2>
+            <div class="filters">
+              <select id="attendanceActivityFilter" aria-label="Filtrar por actividad"></select>
+            </div>
           </div>
           <div class="table-wrap">
             <table>
@@ -313,6 +328,9 @@
                 <tr>
                   <th>Nombre</th>
                   <th>Nacimiento</th>
+                  <th>Nivel academico</th>
+                  <th>Tutor</th>
+                  <th>Salud</th>
                   <th>Inscripcion</th>
                   <th>Primera asistencia</th>
                   <th>Asistencias</th>
