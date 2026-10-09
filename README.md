@@ -1,6 +1,6 @@
 # Registro de Participantes
 
-Aplicacion local para inscribir participantes, registrar actividades y marcar asistencias usando nombre y fecha de nacimiento como identificadores principales.
+Aplicacion local para inscribir participantes, registrar actividades y marcar asistencias usando nombre y fecha de nacimiento como identificadores principales. El registro de participantes incluye genero, nivel academico, padre/madre/tutor y condiciones de salud.
 
 ## Ejecutar
 
@@ -40,7 +40,7 @@ COOKIE_SECURE=false
 
 ## Acceso
 
-La seccion de asistencia puede usarse sin clave. Panel, participantes, actividades y reportes requieren clave de escuela.
+La seccion de asistencia puede usarse sin clave para buscar participantes por nombre y registrar asistencia. Panel, participantes, actividades, edicion, eliminacion y reportes requieren clave de escuela.
 
 Clave inicial:
 
@@ -116,8 +116,12 @@ Cuando el proveedor genere una URL HTTPS, abre esa URL desde el celular. Puedes 
 - Participantes inscritos.
 - Actividades registradas con instrumento asignado.
 - Actividades registradas con profesor asignado.
+- Actividades con categoria y lugar seleccionables.
 - Asistencias por actividad y fecha.
+- Filtro de asistencias por actividad.
+- Edicion y eliminacion de participantes, actividades y asistencias.
 - Asistencias con profesor asignado.
+- Reportes de asistencia con lugar de la actividad.
 - Nuevos participantes por periodo, segun fecha de inscripcion.
 - Participantes que asisten por primera vez por periodo, segun primera asistencia.
 - Exportacion ZIP con CSV de participantes, instrumentos, profesores, actividades y asistencias.

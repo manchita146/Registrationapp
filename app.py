@@ -76,6 +76,10 @@ def init_db() -> None:
                 full_name TEXT NOT NULL,
                 normalized_name TEXT NOT NULL,
                 birth_date TEXT NOT NULL,
+                gender TEXT DEFAULT '',
+                academic_level TEXT DEFAULT '',
+                guardian_name TEXT DEFAULT '',
+                health_conditions TEXT DEFAULT '',
                 phone TEXT DEFAULT '',
                 email TEXT DEFAULT '',
                 neighborhood TEXT DEFAULT '',
@@ -123,6 +127,10 @@ def init_db() -> None:
         ensure_column(db, "activities", "instrument_id", "INTEGER")
         ensure_column(db, "activities", "teacher_id", "INTEGER")
         ensure_column(db, "attendance", "teacher_id", "INTEGER")
+        ensure_column(db, "participants", "gender", "TEXT DEFAULT ''")
+        ensure_column(db, "participants", "academic_level", "TEXT DEFAULT ''")
+        ensure_column(db, "participants", "guardian_name", "TEXT DEFAULT ''")
+        ensure_column(db, "participants", "health_conditions", "TEXT DEFAULT ''")
 
 
 def ensure_column(db: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
@@ -182,6 +190,12 @@ class AppHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             self.route_post(urlparse(self.path).path, get_body(self))
+        except Exception as exc:
+            self.send_error_json(exc)
+
+    def do_PUT(self) -> None:
+        try:
+            self.route_put(urlparse(self.path).path, get_body(self))
         except Exception as exc:
             self.send_error_json(exc)
 
@@ -300,12 +314,27 @@ class AppHandler(BaseHTTPRequestHandler):
             raise ValueError("Endpoint no encontrado")
         routes[path](data)
 
+    def route_put(self, path: str, data: dict) -> None:
+        if path.startswith("/api/participants/"):
+            self.update_participant(path.rsplit("/", 1)[-1], data)
+            return
+        if path.startswith("/api/activities/"):
+            self.update_activity(path.rsplit("/", 1)[-1], data)
+            return
+        if path.startswith("/api/attendance/"):
+            self.update_attendance(path.rsplit("/", 1)[-1], data)
+            return
+        raise ValueError("Endpoint no encontrado")
+
     def route_delete(self, path: str) -> None:
         if path.startswith("/api/participants/"):
             self.delete_participant(path.rsplit("/", 1)[-1])
             return
         if path.startswith("/api/activities/"):
             self.delete_activity(path.rsplit("/", 1)[-1])
+            return
+        if path.startswith("/api/attendance/"):
+            self.delete_attendance(path.rsplit("/", 1)[-1])
             return
         raise ValueError("Endpoint no encontrado")
 
@@ -323,8 +352,8 @@ class AppHandler(BaseHTTPRequestHandler):
     def get_participants(self, params: dict[str, str]) -> None:
         search = normalize_name(params.get("search", ""))
         birth_date = params.get("birth_date", "").strip()
-        public_exact_lookup = bool(search and birth_date)
-        if not self.is_school_user() and not public_exact_lookup:
+        public_lookup = bool(search)
+        if not self.is_school_user() and not public_lookup:
             self.send_json([])
             return
         sql = """
@@ -354,6 +383,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     "id": row["id"],
                     "full_name": row["full_name"],
                     "birth_date": row["birth_date"],
+                    "gender": row["gender"],
                 }
                 for row in rows
             ]
@@ -379,13 +409,30 @@ class AppHandler(BaseHTTPRequestHandler):
             cursor = db.execute(
                 """
                 INSERT INTO participants
-                    (full_name, normalized_name, birth_date, phone, email, neighborhood, notes, registered_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (
+                        full_name,
+                        normalized_name,
+                        birth_date,
+                        gender,
+                        academic_level,
+                        guardian_name,
+                        health_conditions,
+                        phone,
+                        email,
+                        neighborhood,
+                        notes,
+                        registered_at
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     full_name,
                     normalized,
                     birth_date,
+                    data.get("gender", "").strip(),
+                    data.get("academic_level", "").strip(),
+                    data.get("guardian_name", "").strip(),
+                    data.get("health_conditions", "").strip(),
                     data.get("phone", "").strip(),
                     data.get("email", "").strip(),
                     data.get("neighborhood", "").strip(),
@@ -395,6 +442,63 @@ class AppHandler(BaseHTTPRequestHandler):
             )
             participant = db.execute("SELECT * FROM participants WHERE id = ?", (cursor.lastrowid,)).fetchone()
         self.send_json({"participant": dict(participant), "existing": False}, 201)
+
+    def update_participant(self, participant_id: str, data: dict) -> None:
+        self.require_school_user()
+        validate_required(data, ["full_name", "birth_date"])
+        full_name = " ".join(data["full_name"].strip().split())
+        birth_date = parse_date(data["birth_date"], "birth_date")
+        normalized = normalize_name(full_name)
+        registered_at = data.get("registered_at") or today_iso()
+        parse_date(registered_at, "registered_at")
+
+        with connect() as db:
+            conflict = db.execute(
+                """
+                SELECT id FROM participants
+                WHERE normalized_name = ? AND birth_date = ? AND id != ?
+                """,
+                (normalized, birth_date, participant_id),
+            ).fetchone()
+            if conflict:
+                raise ValueError("Ya existe otro participante con ese nombre y fecha de nacimiento")
+            cursor = db.execute(
+                """
+                UPDATE participants
+                SET full_name = ?,
+                    normalized_name = ?,
+                    birth_date = ?,
+                    gender = ?,
+                    academic_level = ?,
+                    guardian_name = ?,
+                    health_conditions = ?,
+                    phone = ?,
+                    email = ?,
+                    neighborhood = ?,
+                    notes = ?,
+                    registered_at = ?
+                WHERE id = ?
+                """,
+                (
+                    full_name,
+                    normalized,
+                    birth_date,
+                    data.get("gender", "").strip(),
+                    data.get("academic_level", "").strip(),
+                    data.get("guardian_name", "").strip(),
+                    data.get("health_conditions", "").strip(),
+                    data.get("phone", "").strip(),
+                    data.get("email", "").strip(),
+                    data.get("neighborhood", "").strip(),
+                    data.get("notes", "").strip(),
+                    registered_at,
+                    participant_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("Participante no encontrado")
+            participant = db.execute("SELECT * FROM participants WHERE id = ?", (participant_id,)).fetchone()
+        self.send_json({"participant": dict(participant)})
 
     def get_instruments(self, params: dict[str, str]) -> None:
         with connect() as db:
@@ -516,6 +620,55 @@ class AppHandler(BaseHTTPRequestHandler):
             activity = db.execute("SELECT * FROM activities WHERE id = ?", (cursor.lastrowid,)).fetchone()
         self.send_json({"activity": dict(activity)}, 201)
 
+    def update_activity(self, activity_id: str, data: dict) -> None:
+        self.require_school_user()
+        validate_required(data, ["name"])
+        activity_date = parse_date(data.get("activity_date") or today_iso(), "activity_date")
+        instrument_id = data.get("instrument_id") or None
+        teacher_id = data.get("teacher_id") or None
+        with connect() as db:
+            if instrument_id:
+                instrument = db.execute(
+                    "SELECT * FROM instruments WHERE id = ?",
+                    (instrument_id,),
+                ).fetchone()
+                if not instrument:
+                    raise ValueError("Instrumento no encontrado")
+            if teacher_id:
+                teacher = db.execute(
+                    "SELECT * FROM teachers WHERE id = ?",
+                    (teacher_id,),
+                ).fetchone()
+                if not teacher:
+                    raise ValueError("Profesor no encontrado")
+            cursor = db.execute(
+                """
+                UPDATE activities
+                SET name = ?,
+                    activity_date = ?,
+                    instrument_id = ?,
+                    teacher_id = ?,
+                    category = ?,
+                    location = ?,
+                    notes = ?
+                WHERE id = ?
+                """,
+                (
+                    data["name"].strip(),
+                    activity_date,
+                    instrument_id,
+                    teacher_id,
+                    data.get("category", "").strip(),
+                    data.get("location", "").strip(),
+                    data.get("notes", "").strip(),
+                    activity_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("Actividad no encontrada")
+            activity = db.execute("SELECT * FROM activities WHERE id = ?", (activity_id,)).fetchone()
+        self.send_json({"activity": dict(activity)})
+
     def delete_participant(self, participant_id: str) -> None:
         self.require_school_user()
         with connect() as db:
@@ -532,6 +685,14 @@ class AppHandler(BaseHTTPRequestHandler):
                 raise ValueError("Actividad no encontrada")
         self.send_json({"deleted": True})
 
+    def delete_attendance(self, attendance_id: str) -> None:
+        self.require_school_user()
+        with connect() as db:
+            cursor = db.execute("DELETE FROM attendance WHERE id = ?", (attendance_id,))
+            if cursor.rowcount == 0:
+                raise ValueError("Asistencia no encontrada")
+        self.send_json({"deleted": True})
+
     def get_attendance(self, params: dict[str, str]) -> None:
         if not self.is_school_user():
             self.send_json([])
@@ -546,9 +707,11 @@ class AppHandler(BaseHTTPRequestHandler):
                    a.id AS activity_id,
                    a.name AS activity_name,
                    a.activity_date,
+                   a.location,
                    i.name AS instrument_name,
                    COALESCE(t.id, at.id) AS teacher_id,
-                   COALESCE(t.name, at.name) AS teacher_name
+                   COALESCE(t.name, at.name) AS teacher_name,
+                   att.created_at
             FROM attendance att
             JOIN participants p ON p.id = att.participant_id
             JOIN activities a ON a.id = att.activity_id
@@ -570,7 +733,7 @@ class AppHandler(BaseHTTPRequestHandler):
         if params.get("to"):
             sql += " AND att.attended_on <= ?"
             values.append(parse_date(params["to"], "to"))
-        sql += " ORDER BY att.attended_on DESC, p.full_name COLLATE NOCASE"
+        sql += " ORDER BY att.created_at DESC, att.id DESC"
         with connect() as db:
             rows = rows_to_dicts(db.execute(sql, values).fetchall())
         self.send_json(rows)
@@ -641,6 +804,67 @@ class AppHandler(BaseHTTPRequestHandler):
             ).fetchone()
         self.send_json({"attendance": dict(attendance), "existing": False}, 201)
 
+    def update_attendance(self, attendance_id: str, data: dict) -> None:
+        self.require_school_user()
+        validate_required(data, ["participant_id", "activity_id"])
+        teacher_id = data.get("teacher_id") or None
+        with connect() as db:
+            activity = db.execute(
+                "SELECT * FROM activities WHERE id = ?",
+                (data["activity_id"],),
+            ).fetchone()
+            participant = db.execute(
+                "SELECT * FROM participants WHERE id = ?",
+                (data["participant_id"],),
+            ).fetchone()
+            if not activity or not participant:
+                raise ValueError("Participante o actividad no encontrado")
+            teacher_id = teacher_id or activity["teacher_id"]
+            if teacher_id:
+                teacher = db.execute(
+                    "SELECT * FROM teachers WHERE id = ?",
+                    (teacher_id,),
+                ).fetchone()
+                if not teacher:
+                    raise ValueError("Profesor no encontrado")
+            attended_on = data.get("attended_on") or activity["activity_date"]
+            attended_on = parse_date(attended_on, "attended_on")
+            try:
+                cursor = db.execute(
+                    """
+                    UPDATE attendance
+                    SET participant_id = ?,
+                        activity_id = ?,
+                        teacher_id = ?,
+                        attended_on = ?,
+                        notes = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        data["participant_id"],
+                        data["activity_id"],
+                        teacher_id,
+                        attended_on,
+                        data.get("notes", "").strip(),
+                        attendance_id,
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                raise ValueError("Ese participante ya tiene asistencia registrada en esa actividad")
+            if cursor.rowcount == 0:
+                raise ValueError("Asistencia no encontrada")
+            attendance = db.execute(
+                """
+                SELECT att.*, p.full_name, a.name AS activity_name
+                FROM attendance att
+                JOIN participants p ON p.id = att.participant_id
+                JOIN activities a ON a.id = att.activity_id
+                WHERE att.id = ?
+                """,
+                (attendance_id,),
+            ).fetchone()
+        self.send_json({"attendance": dict(attendance)})
+
     def get_reports(self, params: dict[str, str]) -> None:
         self.require_school_user()
         start = parse_date(params.get("from") or "1900-01-01", "from")
@@ -698,6 +922,7 @@ class AppHandler(BaseHTTPRequestHandler):
                            i.name AS instrument_name,
                            t.name AS teacher_name,
                            a.category,
+                           a.location,
                            COUNT(att.id) AS attendance_count,
                            COUNT(DISTINCT att.participant_id) AS unique_participants
                     FROM activities a
@@ -751,6 +976,10 @@ class AppHandler(BaseHTTPRequestHandler):
                     """
                     SELECT p.full_name,
                            p.birth_date,
+                           p.gender,
+                           p.academic_level,
+                           p.guardian_name,
+                           p.health_conditions,
                            p.registered_at,
                            MIN(att.attended_on) AS first_attendance_on,
                            COUNT(att.id) AS attendance_count
@@ -805,16 +1034,18 @@ class AppHandler(BaseHTTPRequestHandler):
                                p.full_name,
                                p.birth_date,
                                a.name AS activity_name,
+                               a.location,
                                i.name AS instrument_name,
                                COALESCE(t.name, at.name) AS teacher_name,
-                               att.notes
+                               att.notes,
+                               att.created_at
                         FROM attendance att
                         JOIN participants p ON p.id = att.participant_id
                         JOIN activities a ON a.id = att.activity_id
                         LEFT JOIN instruments i ON i.id = a.instrument_id
                         LEFT JOIN teachers t ON t.id = att.teacher_id
                         LEFT JOIN teachers at ON at.id = a.teacher_id
-                        ORDER BY att.attended_on DESC
+                        ORDER BY att.created_at DESC, att.id DESC
                         """
                     ).fetchall()
                 ),
