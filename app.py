@@ -83,6 +83,7 @@ def init_db() -> None:
                 phone TEXT DEFAULT '',
                 email TEXT DEFAULT '',
                 neighborhood TEXT DEFAULT '',
+                location TEXT DEFAULT '',
                 notes TEXT DEFAULT '',
                 registered_at TEXT NOT NULL,
                 UNIQUE(normalized_name, birth_date)
@@ -131,6 +132,7 @@ def init_db() -> None:
         ensure_column(db, "participants", "academic_level", "TEXT DEFAULT ''")
         ensure_column(db, "participants", "guardian_name", "TEXT DEFAULT ''")
         ensure_column(db, "participants", "health_conditions", "TEXT DEFAULT ''")
+        ensure_column(db, "participants", "location", "TEXT DEFAULT ''")
 
 
 def ensure_column(db: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
@@ -315,6 +317,12 @@ class AppHandler(BaseHTTPRequestHandler):
         routes[path](data)
 
     def route_put(self, path: str, data: dict) -> None:
+        if path.startswith("/api/instruments/"):
+            self.update_instrument(path.rsplit("/", 1)[-1], data)
+            return
+        if path.startswith("/api/teachers/"):
+            self.update_teacher(path.rsplit("/", 1)[-1], data)
+            return
         if path.startswith("/api/participants/"):
             self.update_participant(path.rsplit("/", 1)[-1], data)
             return
@@ -327,6 +335,12 @@ class AppHandler(BaseHTTPRequestHandler):
         raise ValueError("Endpoint no encontrado")
 
     def route_delete(self, path: str) -> None:
+        if path.startswith("/api/instruments/"):
+            self.delete_instrument(path.rsplit("/", 1)[-1])
+            return
+        if path.startswith("/api/teachers/"):
+            self.delete_teacher(path.rsplit("/", 1)[-1])
+            return
         if path.startswith("/api/participants/"):
             self.delete_participant(path.rsplit("/", 1)[-1])
             return
@@ -420,10 +434,11 @@ class AppHandler(BaseHTTPRequestHandler):
                         phone,
                         email,
                         neighborhood,
+                        location,
                         notes,
                         registered_at
                     )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     full_name,
@@ -436,6 +451,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     data.get("phone", "").strip(),
                     data.get("email", "").strip(),
                     data.get("neighborhood", "").strip(),
+                    data.get("location", "").strip(),
                     data.get("notes", "").strip(),
                     registered_at,
                 ),
@@ -475,6 +491,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     phone = ?,
                     email = ?,
                     neighborhood = ?,
+                    location = ?,
                     notes = ?,
                     registered_at = ?
                 WHERE id = ?
@@ -490,6 +507,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     data.get("phone", "").strip(),
                     data.get("email", "").strip(),
                     data.get("neighborhood", "").strip(),
+                    data.get("location", "").strip(),
                     data.get("notes", "").strip(),
                     registered_at,
                     participant_id,
@@ -529,6 +547,35 @@ class AppHandler(BaseHTTPRequestHandler):
             instrument = db.execute("SELECT * FROM instruments WHERE id = ?", (cursor.lastrowid,)).fetchone()
         self.send_json({"instrument": dict(instrument), "existing": False}, 201)
 
+    def update_instrument(self, instrument_id: str, data: dict) -> None:
+        self.require_school_user()
+        validate_required(data, ["name"])
+        name = " ".join(data["name"].strip().split())
+        normalized = normalize_name(name)
+        with connect() as db:
+            conflict = db.execute(
+                "SELECT id FROM instruments WHERE normalized_name = ? AND id != ?",
+                (normalized, instrument_id),
+            ).fetchone()
+            if conflict:
+                raise ValueError("Ya existe otro instrumento con ese nombre")
+            cursor = db.execute(
+                "UPDATE instruments SET name = ?, normalized_name = ? WHERE id = ?",
+                (name, normalized, instrument_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("Instrumento no encontrado")
+            instrument = db.execute("SELECT * FROM instruments WHERE id = ?", (instrument_id,)).fetchone()
+        self.send_json({"instrument": dict(instrument)})
+
+    def delete_instrument(self, instrument_id: str) -> None:
+        self.require_school_user()
+        with connect() as db:
+            cursor = db.execute("DELETE FROM instruments WHERE id = ?", (instrument_id,))
+            if cursor.rowcount == 0:
+                raise ValueError("Instrumento no encontrado")
+        self.send_json({"deleted": True})
+
     def get_teachers(self, params: dict[str, str]) -> None:
         with connect() as db:
             rows = rows_to_dicts(
@@ -557,6 +604,35 @@ class AppHandler(BaseHTTPRequestHandler):
             )
             teacher = db.execute("SELECT * FROM teachers WHERE id = ?", (cursor.lastrowid,)).fetchone()
         self.send_json({"teacher": dict(teacher), "existing": False}, 201)
+
+    def update_teacher(self, teacher_id: str, data: dict) -> None:
+        self.require_school_user()
+        validate_required(data, ["name"])
+        name = " ".join(data["name"].strip().split())
+        normalized = normalize_name(name)
+        with connect() as db:
+            conflict = db.execute(
+                "SELECT id FROM teachers WHERE normalized_name = ? AND id != ?",
+                (normalized, teacher_id),
+            ).fetchone()
+            if conflict:
+                raise ValueError("Ya existe otro profesor con ese nombre")
+            cursor = db.execute(
+                "UPDATE teachers SET name = ?, normalized_name = ? WHERE id = ?",
+                (name, normalized, teacher_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("Profesor no encontrado")
+            teacher = db.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
+        self.send_json({"teacher": dict(teacher)})
+
+    def delete_teacher(self, teacher_id: str) -> None:
+        self.require_school_user()
+        with connect() as db:
+            cursor = db.execute("DELETE FROM teachers WHERE id = ?", (teacher_id,))
+            if cursor.rowcount == 0:
+                raise ValueError("Profesor no encontrado")
+        self.send_json({"deleted": True})
 
     def get_activities(self, params: dict[str, str]) -> None:
         sql = """
@@ -727,6 +803,13 @@ class AppHandler(BaseHTTPRequestHandler):
         if params.get("participant_id"):
             sql += " AND p.id = ?"
             values.append(params["participant_id"])
+        if params.get("search"):
+            sql += " AND (p.normalized_name LIKE ? OR lower(p.full_name) LIKE lower(?))"
+            values.append(f"%{normalize_name(params['search'])}%")
+            values.append(f"%{params['search'].strip()}%")
+        if params.get("teacher_id"):
+            sql += " AND COALESCE(att.teacher_id, a.teacher_id) = CAST(? AS INTEGER)"
+            values.append(params["teacher_id"])
         if params.get("from"):
             sql += " AND att.attended_on >= ?"
             values.append(parse_date(params["from"], "from"))
@@ -865,50 +948,111 @@ class AppHandler(BaseHTTPRequestHandler):
             ).fetchone()
         self.send_json({"attendance": dict(attendance)})
 
-    def get_reports(self, params: dict[str, str]) -> None:
+    def build_report_payload(self, params: dict[str, str]) -> dict:
         self.require_school_user()
         start = parse_date(params.get("from") or "1900-01-01", "from")
         end = parse_date(params.get("to") or "2999-12-31", "to")
         activity_id = params.get("activity_id", "").strip()
+        teacher_id = params.get("teacher_id", "").strip()
+        location = params.get("location", "").strip()
 
-        activity_filter = ""
-        values: list[str] = [start, end]
-        if activity_id:
-            activity_filter = " AND a.id = ?"
-            values.append(activity_id)
+        def attendance_filters(include_dates: bool = True) -> tuple[str, list[str]]:
+            clauses: list[str] = []
+            values: list[str] = []
+            if include_dates:
+                clauses.append("att.attended_on BETWEEN ? AND ?")
+                values.extend([start, end])
+            if activity_id:
+                clauses.append("a.id = ?")
+                values.append(activity_id)
+            if teacher_id:
+                clauses.append("COALESCE(att.teacher_id, a.teacher_id) = CAST(? AS INTEGER)")
+                values.append(teacher_id)
+            if location:
+                clauses.append("a.location = ?")
+                values.append(location)
+            return (" AND ".join(clauses) if clauses else "1 = 1", values)
+
+        def participant_filters() -> tuple[str, list[str]]:
+            clauses = ["p.registered_at BETWEEN ? AND ?"]
+            values: list[str] = [start, end]
+            if location:
+                clauses.append("p.location = ?")
+                values.append(location)
+            return " AND ".join(clauses), values
+
+        attendance_where, attendance_values = attendance_filters()
+        attendance_any_date_where, attendance_any_date_values = attendance_filters(include_dates=False)
+        participant_where, participant_values = participant_filters()
 
         with connect() as db:
             totals = {
-                "registered_total": db.execute("SELECT COUNT(*) FROM participants").fetchone()[0],
-                "activities_total": db.execute("SELECT COUNT(*) FROM activities").fetchone()[0],
-                "attendance_total": db.execute("SELECT COUNT(*) FROM attendance").fetchone()[0],
+                "registered_total": db.execute(
+                    f"SELECT COUNT(*) FROM participants p WHERE {'p.location = ?' if location else '1 = 1'}",
+                    (location,) if location else (),
+                ).fetchone()[0],
+                "activities_total": db.execute(
+                    f"""
+                    SELECT COUNT(DISTINCT a.id)
+                    FROM activities a
+                    LEFT JOIN attendance att ON att.activity_id = a.id
+                    WHERE {attendance_any_date_where}
+                    """,
+                    attendance_any_date_values,
+                ).fetchone()[0],
+                "attendance_total": db.execute(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM attendance att
+                    JOIN activities a ON a.id = att.activity_id
+                    WHERE {attendance_any_date_where}
+                    """,
+                    attendance_any_date_values,
+                ).fetchone()[0],
                 "activities_in_period": db.execute(
-                    "SELECT COUNT(DISTINCT activity_id) FROM attendance WHERE attended_on BETWEEN ? AND ?",
-                    (start, end),
+                    f"""
+                    SELECT COUNT(DISTINCT a.id)
+                    FROM attendance att
+                    JOIN activities a ON a.id = att.activity_id
+                    WHERE {attendance_where}
+                    """,
+                    attendance_values,
                 ).fetchone()[0],
                 "attendance_in_period": db.execute(
-                    "SELECT COUNT(*) FROM attendance WHERE attended_on BETWEEN ? AND ?",
-                    (start, end),
+                    f"""
+                    SELECT COUNT(*)
+                    FROM attendance att
+                    JOIN activities a ON a.id = att.activity_id
+                    WHERE {attendance_where}
+                    """,
+                    attendance_values,
                 ).fetchone()[0],
                 "unique_participants_in_period": db.execute(
-                    "SELECT COUNT(DISTINCT participant_id) FROM attendance WHERE attended_on BETWEEN ? AND ?",
-                    (start, end),
+                    f"""
+                    SELECT COUNT(DISTINCT att.participant_id)
+                    FROM attendance att
+                    JOIN activities a ON a.id = att.activity_id
+                    WHERE {attendance_where}
+                    """,
+                    attendance_values,
                 ).fetchone()[0],
                 "new_registrations": db.execute(
-                    "SELECT COUNT(*) FROM participants WHERE registered_at BETWEEN ? AND ?",
-                    (start, end),
+                    f"SELECT COUNT(*) FROM participants p WHERE {participant_where}",
+                    participant_values,
                 ).fetchone()[0],
                 "first_time_attendees": db.execute(
-                    """
+                    f"""
                     SELECT COUNT(*)
                     FROM (
-                        SELECT participant_id, MIN(attended_on) AS first_attendance
-                        FROM attendance
-                        GROUP BY participant_id
+                        SELECT att.participant_id, MIN(att.attended_on) AS first_attendance
+                        FROM attendance att
+                        JOIN activities a ON a.id = att.activity_id
+                        WHERE {attendance_any_date_where}
+                        GROUP BY att.participant_id
                     )
                     WHERE first_attendance BETWEEN ? AND ?
                     """,
-                    (start, end),
+                    [*attendance_any_date_values, start, end],
                 ).fetchone()[0],
             }
 
@@ -931,80 +1075,146 @@ class AppHandler(BaseHTTPRequestHandler):
                     LEFT JOIN attendance att
                         ON att.activity_id = a.id
                        AND att.attended_on BETWEEN ? AND ?
-                    WHERE att.id IS NOT NULL {activity_filter}
+                    WHERE att.id IS NOT NULL
+                      {"AND a.id = ?" if activity_id else ""}
+                      {"AND COALESCE(att.teacher_id, a.teacher_id) = CAST(? AS INTEGER)" if teacher_id else ""}
+                      {"AND a.location = ?" if location else ""}
                     GROUP BY a.id
                     ORDER BY MAX(att.attended_on) DESC, a.name COLLATE NOCASE
                     """,
-                    values,
+                    [
+                        start,
+                        end,
+                        *([activity_id] if activity_id else []),
+                        *([teacher_id] if teacher_id else []),
+                        *([location] if location else []),
+                    ],
+                ).fetchall()
+            )
+
+            activities_by_teacher_rows = rows_to_dicts(
+                db.execute(
+                    f"""
+                    SELECT COALESCE(t.name, 'Sin profesor') AS teacher_name,
+                           a.location,
+                           COUNT(DISTINCT a.id) AS activities_count,
+                           COUNT(att.id) AS attendance_count,
+                           COUNT(DISTINCT att.participant_id) AS unique_participants
+                    FROM attendance att
+                    JOIN activities a ON a.id = att.activity_id
+                    LEFT JOIN teachers t ON t.id = COALESCE(att.teacher_id, a.teacher_id)
+                    WHERE {attendance_where}
+                    GROUP BY COALESCE(t.id, 0), a.location
+                    ORDER BY teacher_name COLLATE NOCASE, a.location COLLATE NOCASE
+                    """,
+                    attendance_values,
                 ).fetchall()
             )
 
             first_rows = rows_to_dicts(
                 db.execute(
-                    """
+                    f"""
                     SELECT substr(first_attendance, 1, 7) AS period,
                            COUNT(*) AS first_time_attendees
                     FROM (
-                        SELECT participant_id, MIN(attended_on) AS first_attendance
-                        FROM attendance
-                        GROUP BY participant_id
+                        SELECT att.participant_id, MIN(att.attended_on) AS first_attendance
+                        FROM attendance att
+                        JOIN activities a ON a.id = att.activity_id
+                        WHERE {attendance_any_date_where}
+                        GROUP BY att.participant_id
                     )
                     WHERE first_attendance BETWEEN ? AND ?
                     GROUP BY substr(first_attendance, 1, 7)
                     ORDER BY period
                     """,
-                    (start, end),
+                    [*attendance_any_date_values, start, end],
                 ).fetchall()
             )
 
             registration_rows = rows_to_dicts(
                 db.execute(
-                    """
+                    f"""
                     SELECT substr(registered_at, 1, 7) AS period,
                            COUNT(*) AS new_registrations
-                    FROM participants
-                    WHERE registered_at BETWEEN ? AND ?
+                    FROM participants p
+                    WHERE {participant_where}
                     GROUP BY substr(registered_at, 1, 7)
                     ORDER BY period
                     """,
-                    (start, end),
+                    participant_values,
+                ).fetchall()
+            )
+
+            participants_by_location_rows = rows_to_dicts(
+                db.execute(
+                    f"""
+                    SELECT COALESCE(NULLIF(p.location, ''), 'Sin lugar') AS location,
+                           COUNT(*) AS new_registrations
+                    FROM participants p
+                    WHERE {participant_where}
+                    GROUP BY COALESCE(NULLIF(p.location, ''), 'Sin lugar')
+                    ORDER BY location COLLATE NOCASE
+                    """,
+                    participant_values,
                 ).fetchall()
             )
 
             detail_rows = rows_to_dicts(
                 db.execute(
-                    """
+                    f"""
                     SELECT p.full_name,
                            p.birth_date,
                            p.gender,
                            p.academic_level,
                            p.guardian_name,
                            p.health_conditions,
+                           p.location,
                            p.registered_at,
                            MIN(att.attended_on) AS first_attendance_on,
                            COUNT(att.id) AS attendance_count
                     FROM participants p
                     LEFT JOIN attendance att ON att.participant_id = p.id
+                    LEFT JOIN activities a ON a.id = att.activity_id
+                    WHERE {"p.location = ?" if location else "1 = 1"}
+                      {"AND a.id = ?" if activity_id else ""}
+                      {"AND COALESCE(att.teacher_id, a.teacher_id) = CAST(? AS INTEGER)" if teacher_id else ""}
+                      {"AND a.location = ?" if location else ""}
                     GROUP BY p.id
                     ORDER BY p.full_name COLLATE NOCASE
-                    """
+                    """,
+                    [
+                        *([location] if location else []),
+                        *([activity_id] if activity_id else []),
+                        *([teacher_id] if teacher_id else []),
+                        *([location] if location else []),
+                    ],
                 ).fetchall()
             )
 
-        self.send_json(
-            {
-                "totals": totals,
-                "attendance_by_activity": attendance_rows,
-                "new_registrations_by_month": registration_rows,
-                "first_time_attendees_by_month": first_rows,
-                "participant_detail": detail_rows,
-            }
-        )
+        return {
+            "totals": totals,
+            "attendance_by_activity": attendance_rows,
+            "activities_by_teacher": activities_by_teacher_rows,
+            "participants_by_location": participants_by_location_rows,
+            "new_registrations_by_month": registration_rows,
+            "first_time_attendees_by_month": first_rows,
+            "participant_detail": detail_rows,
+        }
+
+    def get_reports(self, params: dict[str, str]) -> None:
+        self.send_json(self.build_report_payload(params))
 
     def export_zip(self, params: dict[str, str]) -> None:
         self.require_school_user()
+        report = self.build_report_payload(params)
         with connect() as db:
             datasets = {
+                "reporte_resumen_actividades.csv": report["attendance_by_activity"],
+                "reporte_actividades_por_profesor.csv": report["activities_by_teacher"],
+                "reporte_inscritos_por_lugar.csv": report["participants_by_location"],
+                "reporte_nuevos_por_mes.csv": report["new_registrations_by_month"],
+                "reporte_primeras_asistencias_por_mes.csv": report["first_time_attendees_by_month"],
+                "reporte_detalle_estudiantes.csv": report["participant_detail"],
                 "participantes.csv": rows_to_dicts(db.execute("SELECT * FROM participants ORDER BY full_name").fetchall()),
                 "instrumentos.csv": rows_to_dicts(db.execute("SELECT * FROM instruments ORDER BY name").fetchall()),
                 "profesores.csv": rows_to_dicts(db.execute("SELECT * FROM teachers ORDER BY name").fetchall()),

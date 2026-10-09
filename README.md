@@ -1,6 +1,6 @@
 # Registro de Participantes
 
-Aplicacion local para inscribir participantes, registrar actividades y marcar asistencias usando nombre y fecha de nacimiento como identificadores principales. El registro de participantes incluye genero, nivel academico, padre/madre/tutor y condiciones de salud.
+Aplicacion local para inscribir participantes, registrar actividades y marcar asistencias usando nombre y fecha de nacimiento como identificadores principales. El registro de participantes incluye genero, nivel academico, lugar, padre/madre/tutor y condiciones de salud.
 
 ## Ejecutar
 
@@ -114,14 +114,19 @@ Cuando el proveedor genere una URL HTTPS, abre esa URL desde el celular. Puedes 
 ## Reportes disponibles
 
 - Participantes inscritos.
+- Participantes inscritos por lugar.
 - Actividades registradas con instrumento asignado.
 - Actividades registradas con profesor asignado.
+- Actividades por profesor y lugar.
 - Actividades con categoria y lugar seleccionables.
 - Asistencias por actividad y fecha.
 - Filtro de asistencias por actividad.
+- Filtros de asistencia por estudiante, profesor y periodo.
 - Edicion y eliminacion de participantes, actividades y asistencias.
+- Edicion y eliminacion de instrumentos y profesores.
 - Asistencias con profesor asignado.
 - Reportes de asistencia con lugar de la actividad.
+- Exportacion ZIP con las tablas de reportes segun los filtros activos.
 - Nuevos participantes por periodo, segun fecha de inscripcion.
 - Participantes que asisten por primera vez por periodo, segun primera asistencia.
 - Exportacion ZIP con CSV de participantes, instrumentos, profesores, actividades y asistencias.
