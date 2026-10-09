@@ -6,6 +6,8 @@ const state = {
   teachers: [],
   report: null,
   authenticated: false,
+  editingInstrumentId: null,
+  editingTeacherId: null,
   editingParticipantId: null,
   editingActivityId: null,
   editingAttendanceId: null,
@@ -128,9 +130,11 @@ function renderAcademicLevels() {
 }
 
 function renderStaticSelects() {
+  const locationOptions = activityLocations.map((value) => `<option value="${value}">${value}</option>`).join("");
   $('[name="gender"]').innerHTML = `<option value="">Seleccionar genero</option>${genderOptions.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
   $('#activityForm [name="category"]').innerHTML = `<option value="">Seleccionar categoria</option>${activityCategories.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
-  $('#activityForm [name="location"]').innerHTML = `<option value="">Seleccionar lugar</option>${activityLocations.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
+  $('#activityForm [name="location"]').innerHTML = `<option value="">Seleccionar lugar</option>${locationOptions}`;
+  $('#participantForm [name="location"]').innerHTML = `<option value="">Seleccionar lugar</option>${locationOptions}`;
 }
 
 function renderMetrics(target, totals) {
@@ -178,6 +182,7 @@ function renderParticipants() {
         <td>${participant.gender || "Sin genero"}</td>
         <td>${participant.academic_level || "Sin nivel"}</td>
         <td>${participant.guardian_name || "Sin tutor"}</td>
+        <td>${participant.location || "Sin lugar"}</td>
         <td>${participant.health_conditions || "Sin registro"}</td>
         <td>${formatDate(participant.registered_at)}</td>
         <td><span class="pill ${statusClass}">${status}</span></td>
@@ -186,21 +191,27 @@ function renderParticipants() {
       </tr>
     `;
   });
-  $("#participantRows").innerHTML = rows.join("") || emptyRow(10, "No hay participantes con esos filtros");
+  $("#participantRows").innerHTML = rows.join("") || emptyRow(11, "No hay participantes con esos filtros");
 }
 
 function renderInstruments() {
   const rows = state.instruments.map((instrument) => `
-    <tr><td>${instrument.name}</td></tr>
+    <tr>
+      <td>${instrument.name}</td>
+      <td class="row-actions">${actionButtons("instrument", instrument.id)}</td>
+    </tr>
   `);
-  $("#instrumentRows").innerHTML = rows.join("") || emptyRow(1, "Agrega instrumentos para usarlos en actividades");
+  $("#instrumentRows").innerHTML = rows.join("") || emptyRow(2, "Agrega instrumentos para usarlos en actividades");
 }
 
 function renderTeachers() {
   const rows = state.teachers.map((teacher) => `
-    <tr><td>${teacher.name}</td></tr>
+    <tr>
+      <td>${teacher.name}</td>
+      <td class="row-actions">${actionButtons("teacher", teacher.id)}</td>
+    </tr>
   `);
-  $("#teacherRows").innerHTML = rows.join("") || emptyRow(1, "Agrega profesores para usarlos en asistencia");
+  $("#teacherRows").innerHTML = rows.join("") || emptyRow(2, "Agrega profesores para usarlos en asistencia");
 }
 
 function renderActivities() {
@@ -247,13 +258,19 @@ function renderSelects() {
   const teacherOptions = state.teachers.map((teacher) =>
     `<option value="${teacher.id}">${teacher.name}</option>`
   );
+  const locationOptions = activityLocations.map((location) =>
+    `<option value="${location}">${location}</option>`
+  );
 
   setSelectOptions('[name="participant_id"]', participantOptions.join(""), `<option value="">Sin participantes</option>`);
   setSelectOptions('[name="activity_id"]', activityOptions.join(""), `<option value="">Sin actividades</option>`);
   setSelectOptions('[name="instrument_id"]', instrumentOptions.join(""), "", `<option value="">Sin instrumento</option>`);
   setSelectOptions('#activityForm [name="teacher_id"]', teacherOptions.join(""), "", `<option value="">Sin profesor</option>`);
   setSelectOptions("#reportActivity", activityOptions.join(""), "", `<option value="">Todas las actividades</option>`);
+  setSelectOptions("#reportTeacher", teacherOptions.join(""), "", `<option value="">Todos los profesores</option>`);
+  setSelectOptions("#reportLocation", locationOptions.join(""), "", `<option value="">Todos los lugares</option>`);
   setSelectOptions("#attendanceActivityFilter", activityOptions.join(""), "", `<option value="">Todas las actividades</option>`);
+  setSelectOptions("#attendanceTeacherFilter", teacherOptions.join(""), "", `<option value="">Todos los profesores</option>`);
 }
 
 function renderReports() {
@@ -280,13 +297,33 @@ function renderReports() {
       <td>${participant.gender || "Sin genero"}</td>
       <td>${participant.academic_level || "Sin nivel"}</td>
       <td>${participant.guardian_name || "Sin tutor"}</td>
+      <td>${participant.location || "Sin lugar"}</td>
       <td>${participant.health_conditions || "Sin registro"}</td>
       <td>${formatDate(participant.registered_at)}</td>
       <td>${formatDate(participant.first_attendance_on)}</td>
       <td>${participant.attendance_count}</td>
     </tr>
   `);
-  $("#reportParticipantRows").innerHTML = participantRows.join("") || emptyRow(9, "Sin participantes");
+  $("#reportParticipantRows").innerHTML = participantRows.join("") || emptyRow(10, "Sin participantes");
+
+  const teacherRows = state.report.activities_by_teacher.map((row) => `
+    <tr>
+      <td>${row.teacher_name || "Sin profesor"}</td>
+      <td>${row.location || "Sin lugar"}</td>
+      <td>${row.activities_count}</td>
+      <td>${row.attendance_count}</td>
+      <td>${row.unique_participants}</td>
+    </tr>
+  `);
+  $("#reportTeacherRows").innerHTML = teacherRows.join("") || emptyRow(5, "Sin actividades para esos filtros");
+
+  const locationRows = state.report.participants_by_location.map((row) => `
+    <tr>
+      <td>${row.location || "Sin lugar"}</td>
+      <td>${row.new_registrations}</td>
+    </tr>
+  `);
+  $("#reportLocationRows").innerHTML = locationRows.join("") || emptyRow(2, "Sin participantes nuevos para esos filtros");
 }
 
 async function loadParticipants() {
@@ -321,15 +358,26 @@ async function loadActivities() {
 async function loadAttendance() {
   const params = new URLSearchParams();
   if ($("#attendanceActivityFilter")?.value) params.set("activity_id", $("#attendanceActivityFilter").value);
+  if ($("#attendanceStudentFilter")?.value) params.set("search", $("#attendanceStudentFilter").value);
+  if ($("#attendanceTeacherFilter")?.value) params.set("teacher_id", $("#attendanceTeacherFilter").value);
+  if ($("#attendanceFrom")?.value) params.set("from", $("#attendanceFrom").value);
+  if ($("#attendanceTo")?.value) params.set("to", $("#attendanceTo").value);
   state.attendance = await api(`/api/attendance?${params}`);
   renderAttendance();
 }
 
-async function loadReports() {
+function reportParams() {
   const params = new URLSearchParams();
   if ($("#reportFrom").value) params.set("from", $("#reportFrom").value);
   if ($("#reportTo").value) params.set("to", $("#reportTo").value);
   if ($("#reportActivity").value) params.set("activity_id", $("#reportActivity").value);
+  if ($("#reportTeacher").value) params.set("teacher_id", $("#reportTeacher").value);
+  if ($("#reportLocation").value) params.set("location", $("#reportLocation").value);
+  return params;
+}
+
+async function loadReports() {
+  const params = reportParams();
   state.report = await api(`/api/reports?${params}`);
   renderDashboard();
   renderReports();
@@ -363,6 +411,20 @@ function resetParticipantForm() {
   $("#participantCancelEdit").classList.add("hidden");
 }
 
+function resetInstrumentForm() {
+  $("#instrumentForm").reset();
+  state.editingInstrumentId = null;
+  $("#instrumentSubmitButton").textContent = "Agregar";
+  $("#instrumentCancelEdit").classList.add("hidden");
+}
+
+function resetTeacherForm() {
+  $("#teacherForm").reset();
+  state.editingTeacherId = null;
+  $("#teacherSubmitButton").textContent = "Agregar";
+  $("#teacherCancelEdit").classList.add("hidden");
+}
+
 function resetActivityForm() {
   $("#activityForm").reset();
   state.editingActivityId = null;
@@ -387,6 +449,22 @@ function editParticipant(participant) {
   $("#participantSubmitButton").textContent = "Guardar cambios";
   $("#participantCancelEdit").classList.remove("hidden");
   $("#participantForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function editInstrument(instrument) {
+  state.editingInstrumentId = instrument.id;
+  fillForm($("#instrumentForm"), instrument);
+  $("#instrumentSubmitButton").textContent = "Guardar cambios";
+  $("#instrumentCancelEdit").classList.remove("hidden");
+  $("#instrumentForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function editTeacher(teacher) {
+  state.editingTeacherId = teacher.id;
+  fillForm($("#teacherForm"), teacher);
+  $("#teacherSubmitButton").textContent = "Guardar cambios";
+  $("#teacherCancelEdit").classList.remove("hidden");
+  $("#teacherForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function editActivity(activity) {
@@ -490,14 +568,16 @@ function setupForms() {
     event.preventDefault();
     const form = event.currentTarget;
     try {
-      const result = await api("/api/instruments", {
-        method: "POST",
+      const editing = Boolean(state.editingInstrumentId);
+      const result = await api(editing ? `/api/instruments/${state.editingInstrumentId}` : "/api/instruments", {
+        method: editing ? "PUT" : "POST",
         body: JSON.stringify(formData(form)),
       });
-      setMessage("#instrumentMessage", result.existing ? "Ese instrumento ya existe." : "Instrumento agregado.");
-      if (!result.existing) form.reset();
+      setMessage("#instrumentMessage", result.existing ? "Ese instrumento ya existe." : editing ? "Instrumento actualizado." : "Instrumento agregado.");
+      if (!result.existing) resetInstrumentForm();
       await loadInstruments();
-      toast(result.existing ? "Instrumento existente" : "Instrumento agregado");
+      await loadActivities();
+      toast(result.existing ? "Instrumento existente" : editing ? "Instrumento actualizado" : "Instrumento agregado");
     } catch (error) {
       setMessage("#instrumentMessage", error.message, "error");
     }
@@ -507,14 +587,16 @@ function setupForms() {
     event.preventDefault();
     const form = event.currentTarget;
     try {
-      const result = await api("/api/teachers", {
-        method: "POST",
+      const editing = Boolean(state.editingTeacherId);
+      const result = await api(editing ? `/api/teachers/${state.editingTeacherId}` : "/api/teachers", {
+        method: editing ? "PUT" : "POST",
         body: JSON.stringify(formData(form)),
       });
-      setMessage("#teacherMessage", result.existing ? "Ese profesor ya existe." : "Profesor agregado.");
-      if (!result.existing) form.reset();
+      setMessage("#teacherMessage", result.existing ? "Ese profesor ya existe." : editing ? "Profesor actualizado." : "Profesor agregado.");
+      if (!result.existing) resetTeacherForm();
       await loadTeachers();
-      toast(result.existing ? "Profesor existente" : "Profesor agregado");
+      await loadActivities();
+      toast(result.existing ? "Profesor existente" : editing ? "Profesor actualizado" : "Profesor agregado");
     } catch (error) {
       setMessage("#teacherMessage", error.message, "error");
     }
@@ -557,6 +639,8 @@ function setupForms() {
   });
 
   $("#participantCancelEdit").addEventListener("click", resetParticipantForm);
+  $("#instrumentCancelEdit").addEventListener("click", resetInstrumentForm);
+  $("#teacherCancelEdit").addEventListener("click", resetTeacherForm);
   $("#activityCancelEdit").addEventListener("click", resetActivityForm);
   $("#attendanceCancelEdit").addEventListener("click", resetAttendanceForm);
 }
@@ -566,7 +650,7 @@ function setupFilters() {
     $(`#${id}`).addEventListener("input", loadParticipants);
   });
   $("#activitySearch").addEventListener("input", loadActivities);
-  ["reportFrom", "reportTo", "reportActivity"].forEach((id) => {
+  ["reportFrom", "reportTo", "reportActivity", "reportTeacher", "reportLocation"].forEach((id) => {
     $(`#${id}`).addEventListener("input", loadReports);
   });
   ["attendanceNameSearch", "attendanceBirthSearch"].forEach((id) => {
@@ -579,9 +663,43 @@ function setupFilters() {
       renderSelects();
     });
   });
-  $("#attendanceActivityFilter").addEventListener("input", loadAttendance);
+  ["attendanceStudentFilter", "attendanceActivityFilter", "attendanceTeacherFilter", "attendanceFrom", "attendanceTo"].forEach((id) => {
+    $(`#${id}`).addEventListener("input", loadAttendance);
+  });
   $("#exportButton").addEventListener("click", () => {
-    window.location.href = "/api/export";
+    window.location.href = `/api/export?${reportParams()}`;
+  });
+
+  $("#instrumentRows").addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-edit-instrument]");
+    if (editButton) {
+      const instrument = state.instruments.find((item) => String(item.id) === editButton.dataset.editInstrument);
+      if (instrument) editInstrument(instrument);
+      return;
+    }
+    const button = event.target.closest("[data-delete-instrument]");
+    if (!button) return;
+    if (!confirm("Eliminar este instrumento lo quitara de las actividades que lo usan. Deseas continuar?")) return;
+    await api(`/api/instruments/${button.dataset.deleteInstrument}`, { method: "DELETE" });
+    if (String(state.editingInstrumentId) === button.dataset.deleteInstrument) resetInstrumentForm();
+    await refreshAll();
+    toast("Instrumento eliminado");
+  });
+
+  $("#teacherRows").addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-edit-teacher]");
+    if (editButton) {
+      const teacher = state.teachers.find((item) => String(item.id) === editButton.dataset.editTeacher);
+      if (teacher) editTeacher(teacher);
+      return;
+    }
+    const button = event.target.closest("[data-delete-teacher]");
+    if (!button) return;
+    if (!confirm("Eliminar este profesor lo quitara de actividades y asistencias que lo usan. Deseas continuar?")) return;
+    await api(`/api/teachers/${button.dataset.deleteTeacher}`, { method: "DELETE" });
+    if (String(state.editingTeacherId) === button.dataset.deleteTeacher) resetTeacherForm();
+    await refreshAll();
+    toast("Profesor eliminado");
   });
 
   $("#participantRows").addEventListener("click", async (event) => {

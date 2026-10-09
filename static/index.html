@@ -87,6 +87,9 @@
             <label>Barrio / comunidad
               <input name="neighborhood">
             </label>
+            <label>Lugar
+              <select name="location"></select>
+            </label>
             <label class="full">Enfermedades o trastornos de salud que padece
               <textarea name="health_conditions" rows="2"></textarea>
             </label>
@@ -118,6 +121,7 @@
                   <th>Genero</th>
                   <th>Nivel academico</th>
                   <th>Tutor</th>
+                  <th>Lugar</th>
                   <th>Salud</th>
                   <th>Inscripcion</th>
                   <th>Primera asistencia</th>
@@ -137,11 +141,13 @@
             <h2>Instrumentos</h2>
           </div>
           <form id="instrumentForm" class="grid-form">
+            <input name="id" type="hidden">
             <label>Nombre del instrumento
               <input name="name" required placeholder="Piano, guitarra, violin">
             </label>
             <div class="actions">
-              <button type="submit" class="primary">Agregar</button>
+              <button id="instrumentSubmitButton" type="submit" class="primary">Agregar</button>
+              <button id="instrumentCancelEdit" type="button" class="hidden">Cancelar edicion</button>
               <span id="instrumentMessage" class="message"></span>
             </div>
           </form>
@@ -150,6 +156,7 @@
               <thead>
                 <tr>
                   <th>Instrumento</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="instrumentRows"></tbody>
@@ -162,11 +169,13 @@
             <h2>Profesores</h2>
           </div>
           <form id="teacherForm" class="grid-form">
+            <input name="id" type="hidden">
             <label>Nombre del profesor
               <input name="name" required placeholder="Nombre y apellido">
             </label>
             <div class="actions">
-              <button type="submit" class="primary">Agregar</button>
+              <button id="teacherSubmitButton" type="submit" class="primary">Agregar</button>
+              <button id="teacherCancelEdit" type="button" class="hidden">Cancelar edicion</button>
               <span id="teacherMessage" class="message"></span>
             </div>
           </form>
@@ -175,6 +184,7 @@
               <thead>
                 <tr>
                   <th>Profesor</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="teacherRows"></tbody>
@@ -278,7 +288,11 @@
           <div class="panel-heading split">
             <h2>Asistencias registradas</h2>
             <div class="filters">
+              <input id="attendanceStudentFilter" placeholder="Estudiante">
               <select id="attendanceActivityFilter" aria-label="Filtrar por actividad"></select>
+              <select id="attendanceTeacherFilter" aria-label="Filtrar por profesor"></select>
+              <input id="attendanceFrom" type="date" aria-label="Desde">
+              <input id="attendanceTo" type="date" aria-label="Hasta">
             </div>
           </div>
           <div class="table-wrap">
@@ -309,6 +323,8 @@
               <input id="reportFrom" type="date" aria-label="Desde">
               <input id="reportTo" type="date" aria-label="Hasta">
               <select id="reportActivity"></select>
+              <select id="reportTeacher"></select>
+              <select id="reportLocation"></select>
               <button id="exportButton" type="button">Exportar</button>
             </div>
           </div>
@@ -332,6 +348,45 @@
           </div>
         </section>
 
+        <div class="two-column">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Actividades por profesor</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Profesor</th>
+                    <th>Lugar</th>
+                    <th>Actividades</th>
+                    <th>Asistencias</th>
+                    <th>Participantes unicos</th>
+                  </tr>
+                </thead>
+                <tbody id="reportTeacherRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Inscritos por lugar</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lugar</th>
+                    <th>Nuevos inscritos</th>
+                  </tr>
+                </thead>
+                <tbody id="reportLocationRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
         <section class="panel">
           <div class="panel-heading">
             <h2>Detalle de participantes</h2>
@@ -345,6 +400,7 @@
                   <th>Genero</th>
                   <th>Nivel academico</th>
                   <th>Tutor</th>
+                  <th>Lugar</th>
                   <th>Salud</th>
                   <th>Inscripcion</th>
                   <th>Primera asistencia</th>
