@@ -6,6 +6,9 @@ const state = {
   teachers: [],
   report: null,
   authenticated: false,
+  editingParticipantId: null,
+  editingActivityId: null,
+  editingAttendanceId: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -37,6 +40,23 @@ const academicLevels = [
   "Educacion laboral / Tecnica",
   "Universitario",
   "Bachiller / Egresado",
+];
+
+const genderOptions = ["Masculino", "Femenino"];
+
+const activityCategories = [
+  "Clase regular",
+  "Master class",
+  "Taller",
+  "Recital",
+  "Donacion",
+  "Otro",
+];
+
+const activityLocations = [
+  "Parque San Jose",
+  "Villa Mella",
+  "Otro",
 ];
 
 function formatDate(value) {
@@ -80,6 +100,24 @@ function emptyRow(colspan, text) {
   return `<tr><td colspan="${colspan}" class="empty">${text}</td></tr>`;
 }
 
+function actionButtons(type, id) {
+  if (!state.authenticated) return "";
+  return `
+    <button type="button" data-edit-${type}="${id}">Editar</button>
+    <button type="button" class="danger" data-delete-${type}="${id}">Eliminar</button>
+  `;
+}
+
+function setSelectOptions(selector, optionsHtml, fallbackHtml = "", placeholderHtml = "") {
+  const node = $(selector);
+  if (!node) return;
+  const selected = node.value;
+  node.innerHTML = optionsHtml || placeholderHtml ? `${placeholderHtml}${optionsHtml}` : fallbackHtml;
+  if ([...node.options].some((option) => option.value === selected)) {
+    node.value = selected;
+  }
+}
+
 function metric(label, value) {
   return `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`;
 }
@@ -87,6 +125,12 @@ function metric(label, value) {
 function renderAcademicLevels() {
   const options = academicLevels.map((level) => `<option value="${level}">${level}</option>`);
   $('[name="academic_level"]').innerHTML = `<option value="">Seleccionar nivel</option>${options.join("")}`;
+}
+
+function renderStaticSelects() {
+  $('[name="gender"]').innerHTML = `<option value="">Seleccionar genero</option>${genderOptions.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
+  $('#activityForm [name="category"]').innerHTML = `<option value="">Seleccionar categoria</option>${activityCategories.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
+  $('#activityForm [name="location"]').innerHTML = `<option value="">Seleccionar lugar</option>${activityLocations.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
 }
 
 function renderMetrics(target, totals) {
@@ -131,17 +175,18 @@ function renderParticipants() {
       <tr>
         <td>${participant.full_name}</td>
         <td>${formatDate(participant.birth_date)}</td>
+        <td>${participant.gender || "Sin genero"}</td>
         <td>${participant.academic_level || "Sin nivel"}</td>
         <td>${participant.guardian_name || "Sin tutor"}</td>
         <td>${participant.health_conditions || "Sin registro"}</td>
         <td>${formatDate(participant.registered_at)}</td>
         <td><span class="pill ${statusClass}">${status}</span></td>
         <td>${participant.attendance_count || 0}</td>
-        <td><button type="button" class="danger" data-delete-participant="${participant.id}">Eliminar</button></td>
+        <td class="row-actions">${actionButtons("participant", participant.id)}</td>
       </tr>
     `;
   });
-  $("#participantRows").innerHTML = rows.join("") || emptyRow(9, "No hay participantes con esos filtros");
+  $("#participantRows").innerHTML = rows.join("") || emptyRow(10, "No hay participantes con esos filtros");
 }
 
 function renderInstruments() {
@@ -167,7 +212,7 @@ function renderActivities() {
       <td>${activity.category || "Sin categoria"}</td>
       <td>${activity.location || "Sin lugar"}</td>
       <td><span class="pill green">${activity.attendance_count || 0}</span></td>
-      <td><button type="button" class="danger" data-delete-activity="${activity.id}">Eliminar</button></td>
+      <td class="row-actions">${actionButtons("activity", activity.id)}</td>
     </tr>
   `);
   $("#activityRows").innerHTML = rows.join("") || emptyRow(7, "No hay actividades con esos filtros");
@@ -180,11 +225,13 @@ function renderAttendance() {
       <td>${item.full_name}</td>
       <td>${formatDate(item.birth_date)}</td>
       <td>${item.activity_name}</td>
+      <td>${item.location || "Sin lugar"}</td>
       <td>${item.instrument_name || "Sin instrumento"}</td>
       <td>${item.teacher_name || "Sin profesor"}</td>
+      <td class="row-actions">${actionButtons("attendance", item.id)}</td>
     </tr>
   `);
-  $("#attendanceRows").innerHTML = rows.join("") || emptyRow(6, "No hay asistencias registradas");
+  $("#attendanceRows").innerHTML = rows.join("") || emptyRow(8, "No hay asistencias registradas");
 }
 
 function renderSelects() {
@@ -201,22 +248,12 @@ function renderSelects() {
     `<option value="${teacher.id}">${teacher.name}</option>`
   );
 
-  $('[name="participant_id"]').innerHTML = participantOptions.join("") || `<option value="">Sin participantes</option>`;
-  $('[name="activity_id"]').innerHTML = activityOptions.join("") || `<option value="">Sin actividades</option>`;
-  $('[name="instrument_id"]').innerHTML = `<option value="">Sin instrumento</option>${instrumentOptions.join("")}`;
-  const activityTeacherSelect = $('#activityForm [name="teacher_id"]');
-  if (activityTeacherSelect) {
-    activityTeacherSelect.innerHTML = `<option value="">Sin profesor</option>${teacherOptions.join("")}`;
-  }
-  $("#reportActivity").innerHTML = `<option value="">Todas las actividades</option>${activityOptions.join("")}`;
-  const attendanceActivityFilter = $("#attendanceActivityFilter");
-  if (attendanceActivityFilter) {
-    const selected = attendanceActivityFilter.value;
-    attendanceActivityFilter.innerHTML = `<option value="">Todas las actividades</option>${activityOptions.join("")}`;
-    if ([...attendanceActivityFilter.options].some((option) => option.value === selected)) {
-      attendanceActivityFilter.value = selected;
-    }
-  }
+  setSelectOptions('[name="participant_id"]', participantOptions.join(""), `<option value="">Sin participantes</option>`);
+  setSelectOptions('[name="activity_id"]', activityOptions.join(""), `<option value="">Sin actividades</option>`);
+  setSelectOptions('[name="instrument_id"]', instrumentOptions.join(""), "", `<option value="">Sin instrumento</option>`);
+  setSelectOptions('#activityForm [name="teacher_id"]', teacherOptions.join(""), "", `<option value="">Sin profesor</option>`);
+  setSelectOptions("#reportActivity", activityOptions.join(""), "", `<option value="">Todas las actividades</option>`);
+  setSelectOptions("#attendanceActivityFilter", activityOptions.join(""), "", `<option value="">Todas las actividades</option>`);
 }
 
 function renderReports() {
@@ -229,16 +266,18 @@ function renderReports() {
       <td>${activity.instrument_name || "Sin instrumento"}</td>
       <td>${activity.teacher_name || "Sin profesor"}</td>
       <td>${activity.category || "Sin categoria"}</td>
+      <td>${activity.location || "Sin lugar"}</td>
       <td>${activity.attendance_count}</td>
       <td>${activity.unique_participants}</td>
     </tr>
   `);
-  $("#reportActivityRows").innerHTML = activityRows.join("") || emptyRow(7, "Sin datos para el periodo");
+  $("#reportActivityRows").innerHTML = activityRows.join("") || emptyRow(8, "Sin datos para el periodo");
 
   const participantRows = state.report.participant_detail.map((participant) => `
     <tr>
       <td>${participant.full_name}</td>
       <td>${formatDate(participant.birth_date)}</td>
+      <td>${participant.gender || "Sin genero"}</td>
       <td>${participant.academic_level || "Sin nivel"}</td>
       <td>${participant.guardian_name || "Sin tutor"}</td>
       <td>${participant.health_conditions || "Sin registro"}</td>
@@ -247,7 +286,7 @@ function renderReports() {
       <td>${participant.attendance_count}</td>
     </tr>
   `);
-  $("#reportParticipantRows").innerHTML = participantRows.join("") || emptyRow(8, "Sin participantes");
+  $("#reportParticipantRows").innerHTML = participantRows.join("") || emptyRow(9, "Sin participantes");
 }
 
 async function loadParticipants() {
@@ -308,6 +347,62 @@ async function refreshAll() {
     state.attendance = [];
     renderAttendance();
   }
+}
+
+function fillForm(form, values) {
+  [...form.elements].forEach((field) => {
+    if (!field.name || values[field.name] === undefined || values[field.name] === null) return;
+    field.value = values[field.name];
+  });
+}
+
+function resetParticipantForm() {
+  $("#participantForm").reset();
+  state.editingParticipantId = null;
+  $("#participantSubmitButton").textContent = "Guardar";
+  $("#participantCancelEdit").classList.add("hidden");
+}
+
+function resetActivityForm() {
+  $("#activityForm").reset();
+  state.editingActivityId = null;
+  $("#activitySubmitButton").textContent = "Crear";
+  $("#activityCancelEdit").classList.add("hidden");
+}
+
+function resetAttendanceForm() {
+  const activityId = $('#attendanceForm [name="activity_id"]').value;
+  const attendedOn = $('#attendanceForm [name="attended_on"]').value;
+  $("#attendanceForm").reset();
+  $('#attendanceForm [name="activity_id"]').value = activityId;
+  $('#attendanceForm [name="attended_on"]').value = attendedOn;
+  state.editingAttendanceId = null;
+  $("#attendanceSubmitButton").textContent = "Registrar asistencia";
+  $("#attendanceCancelEdit").classList.add("hidden");
+}
+
+function editParticipant(participant) {
+  state.editingParticipantId = participant.id;
+  fillForm($("#participantForm"), participant);
+  $("#participantSubmitButton").textContent = "Guardar cambios";
+  $("#participantCancelEdit").classList.remove("hidden");
+  $("#participantForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function editActivity(activity) {
+  state.editingActivityId = activity.id;
+  fillForm($("#activityForm"), activity);
+  $("#activitySubmitButton").textContent = "Guardar cambios";
+  $("#activityCancelEdit").classList.remove("hidden");
+  $("#activityForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function editAttendance(attendance) {
+  state.editingAttendanceId = attendance.id;
+  fillForm($("#attendanceForm"), attendance);
+  $("#attendanceSubmitButton").textContent = "Guardar cambios";
+  $("#attendanceCancelEdit").classList.remove("hidden");
+  $("#attendanceForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function loadAuth() {
@@ -377,14 +472,15 @@ function setupForms() {
     event.preventDefault();
     const form = event.currentTarget;
     try {
-      const result = await api("/api/participants", {
-        method: "POST",
+      const editing = Boolean(state.editingParticipantId);
+      const result = await api(editing ? `/api/participants/${state.editingParticipantId}` : "/api/participants", {
+        method: editing ? "PUT" : "POST",
         body: JSON.stringify(formData(form)),
       });
-      setMessage("#participantMessage", result.existing ? "Ya existia; no se duplico." : "Participante guardado.");
-      if (!result.existing) form.reset();
+      setMessage("#participantMessage", result.existing ? "Ya existia; no se duplico." : editing ? "Participante actualizado." : "Participante guardado.");
+      if (!result.existing) resetParticipantForm();
       await refreshAll();
-      toast(result.existing ? "Participante encontrado" : "Participante inscrito");
+      toast(result.existing ? "Participante encontrado" : editing ? "Participante actualizado" : "Participante inscrito");
     } catch (error) {
       setMessage("#participantMessage", error.message, "error");
     }
@@ -428,14 +524,15 @@ function setupForms() {
     event.preventDefault();
     const form = event.currentTarget;
     try {
-      await api("/api/activities", {
-        method: "POST",
+      const editing = Boolean(state.editingActivityId);
+      await api(editing ? `/api/activities/${state.editingActivityId}` : "/api/activities", {
+        method: editing ? "PUT" : "POST",
         body: JSON.stringify(formData(form)),
       });
-      setMessage("#activityMessage", "Actividad creada.");
-      form.reset();
+      setMessage("#activityMessage", editing ? "Actividad actualizada." : "Actividad creada.");
+      resetActivityForm();
       await refreshAll();
-      toast("Actividad creada");
+      toast(editing ? "Actividad actualizada" : "Actividad creada");
     } catch (error) {
       setMessage("#activityMessage", error.message, "error");
     }
@@ -445,17 +542,23 @@ function setupForms() {
     event.preventDefault();
     const form = event.currentTarget;
     try {
-      const result = await api("/api/attendance", {
-        method: "POST",
+      const editing = Boolean(state.editingAttendanceId);
+      const result = await api(editing ? `/api/attendance/${state.editingAttendanceId}` : "/api/attendance", {
+        method: editing ? "PUT" : "POST",
         body: JSON.stringify(formData(form)),
       });
-      setMessage("#attendanceMessage", result.existing ? "Esa asistencia ya estaba registrada." : "Asistencia registrada.");
+      setMessage("#attendanceMessage", result.existing ? "Esa asistencia ya estaba registrada." : editing ? "Asistencia actualizada." : "Asistencia registrada.");
+      if (editing) resetAttendanceForm();
       await refreshAll();
-      toast(result.existing ? "Asistencia existente" : "Asistencia registrada");
+      toast(result.existing ? "Asistencia existente" : editing ? "Asistencia actualizada" : "Asistencia registrada");
     } catch (error) {
       setMessage("#attendanceMessage", error.message, "error");
     }
   });
+
+  $("#participantCancelEdit").addEventListener("click", resetParticipantForm);
+  $("#activityCancelEdit").addEventListener("click", resetActivityForm);
+  $("#attendanceCancelEdit").addEventListener("click", resetAttendanceForm);
 }
 
 function setupFilters() {
@@ -482,21 +585,51 @@ function setupFilters() {
   });
 
   $("#participantRows").addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-edit-participant]");
+    if (editButton) {
+      const participant = state.participants.find((item) => String(item.id) === editButton.dataset.editParticipant);
+      if (participant) editParticipant(participant);
+      return;
+    }
     const button = event.target.closest("[data-delete-participant]");
     if (!button) return;
     if (!confirm("Eliminar este participante tambien eliminara sus asistencias. Deseas continuar?")) return;
     await api(`/api/participants/${button.dataset.deleteParticipant}`, { method: "DELETE" });
+    if (String(state.editingParticipantId) === button.dataset.deleteParticipant) resetParticipantForm();
     await refreshAll();
     toast("Participante eliminado");
   });
 
   $("#activityRows").addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-edit-activity]");
+    if (editButton) {
+      const activity = state.activities.find((item) => String(item.id) === editButton.dataset.editActivity);
+      if (activity) editActivity(activity);
+      return;
+    }
     const button = event.target.closest("[data-delete-activity]");
     if (!button) return;
     if (!confirm("Eliminar esta actividad tambien eliminara sus asistencias. Deseas continuar?")) return;
     await api(`/api/activities/${button.dataset.deleteActivity}`, { method: "DELETE" });
+    if (String(state.editingActivityId) === button.dataset.deleteActivity) resetActivityForm();
     await refreshAll();
     toast("Actividad eliminada");
+  });
+
+  $("#attendanceRows").addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-edit-attendance]");
+    if (editButton) {
+      const attendance = state.attendance.find((item) => String(item.id) === editButton.dataset.editAttendance);
+      if (attendance) editAttendance(attendance);
+      return;
+    }
+    const button = event.target.closest("[data-delete-attendance]");
+    if (!button) return;
+    if (!confirm("Eliminar esta asistencia?")) return;
+    await api(`/api/attendance/${button.dataset.deleteAttendance}`, { method: "DELETE" });
+    if (String(state.editingAttendanceId) === button.dataset.deleteAttendance) resetAttendanceForm();
+    await refreshAll();
+    toast("Asistencia eliminada");
   });
 }
 
@@ -514,6 +647,7 @@ async function init() {
   setupForms();
   setupFilters();
   renderAcademicLevels();
+  renderStaticSelects();
   setDefaultDates();
   await loadAuth();
   await refreshAll();

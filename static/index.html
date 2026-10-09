@@ -59,11 +59,15 @@
             <h2>Inscribir participante</h2>
           </div>
           <form id="participantForm" class="grid-form">
+            <input name="id" type="hidden">
             <label>Nombre completo
               <input name="full_name" required autocomplete="name">
             </label>
             <label>Fecha de nacimiento
               <input name="birth_date" type="date" required>
+            </label>
+            <label>Genero
+              <select name="gender"></select>
             </label>
             <label>Nivel academico
               <select name="academic_level"></select>
@@ -90,7 +94,8 @@
               <textarea name="notes" rows="2"></textarea>
             </label>
             <div class="actions full">
-              <button type="submit" class="primary">Guardar</button>
+              <button id="participantSubmitButton" type="submit" class="primary">Guardar</button>
+              <button id="participantCancelEdit" type="button" class="hidden">Cancelar edicion</button>
               <span id="participantMessage" class="message"></span>
             </div>
           </form>
@@ -110,13 +115,14 @@
                 <tr>
                   <th>Nombre</th>
                   <th>Nacimiento</th>
+                  <th>Genero</th>
                   <th>Nivel academico</th>
                   <th>Tutor</th>
                   <th>Salud</th>
                   <th>Inscripcion</th>
                   <th>Primera asistencia</th>
                   <th>Total</th>
-                  <th>Accion</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="participantRows"></tbody>
@@ -181,6 +187,8 @@
             <h2>Nueva actividad</h2>
           </div>
           <form id="activityForm" class="grid-form">
+            <input name="id" type="hidden">
+            <input name="activity_date" type="hidden">
             <label>Nombre
               <input name="name" required>
             </label>
@@ -191,16 +199,17 @@
               <select name="teacher_id"></select>
             </label>
             <label>Categoria
-              <input name="category">
+              <select name="category"></select>
             </label>
             <label>Lugar
-              <input name="location">
+              <select name="location"></select>
             </label>
             <label class="full">Notas
               <textarea name="notes" rows="2"></textarea>
             </label>
             <div class="actions full">
-              <button type="submit" class="primary">Crear</button>
+              <button id="activitySubmitButton" type="submit" class="primary">Crear</button>
+              <button id="activityCancelEdit" type="button" class="hidden">Cancelar edicion</button>
               <span id="activityMessage" class="message"></span>
             </div>
           </form>
@@ -223,7 +232,7 @@
                   <th>Categoria</th>
                   <th>Lugar</th>
                   <th>Asistencias</th>
-                  <th>Accion</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="activityRows"></tbody>
@@ -238,6 +247,7 @@
             <h2>Asignar participacion</h2>
           </div>
           <form id="attendanceForm" class="grid-form">
+            <input name="id" type="hidden">
             <label>Buscar participante
               <input id="attendanceNameSearch" placeholder="Nombre">
             </label>
@@ -257,7 +267,8 @@
               <input name="notes">
             </label>
             <div class="actions full">
-              <button type="submit" class="primary">Registrar asistencia</button>
+              <button id="attendanceSubmitButton" type="submit" class="primary">Registrar asistencia</button>
+              <button id="attendanceCancelEdit" type="button" class="hidden">Cancelar edicion</button>
               <span id="attendanceMessage" class="message"></span>
             </div>
           </form>
@@ -278,8 +289,10 @@
                   <th>Participante</th>
                   <th>Nacimiento</th>
                   <th>Actividad</th>
+                  <th>Lugar</th>
                   <th>Instrumento</th>
                   <th>Profesor</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="attendanceRows"></tbody>
@@ -309,6 +322,7 @@
                   <th>Instrumento</th>
                   <th>Profesor</th>
                   <th>Categoria</th>
+                  <th>Lugar</th>
                   <th>Asistencias</th>
                   <th>Participantes unicos</th>
                 </tr>
@@ -328,6 +342,7 @@
                 <tr>
                   <th>Nombre</th>
                   <th>Nacimiento</th>
+                  <th>Genero</th>
                   <th>Nivel academico</th>
                   <th>Tutor</th>
                   <th>Salud</th>
