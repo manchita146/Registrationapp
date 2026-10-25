@@ -286,13 +286,14 @@
 
         <section class="panel">
           <div class="panel-heading split">
-            <h2>Asistencias registradas</h2>
-            <div class="filters">
+            <h2 id="attendanceListTitle">Asistencias registradas</h2>
+            <div class="filters" data-protected="true">
               <input id="attendanceStudentFilter" placeholder="Estudiante">
               <select id="attendanceActivityFilter" aria-label="Filtrar por actividad"></select>
               <select id="attendanceTeacherFilter" aria-label="Filtrar por profesor"></select>
               <input id="attendanceFrom" type="date" aria-label="Desde">
               <input id="attendanceTo" type="date" aria-label="Hasta">
+              <button id="attendanceClearFilters" type="button">Quitar filtros</button>
             </div>
           </div>
           <div class="table-wrap">
@@ -415,6 +416,6 @@
     </main>
 
     <div id="toast" role="status" aria-live="polite"></div>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=attendance-20261025"></script>
   </body>
 </html>

@@ -1,5 +1,12 @@
 const state = {
   participants: [],
+  attendanceParticipants: [],
+  publicAttendance: [],
+  attendanceLookupRequest: 0,
+  attendanceListRequest: 0,
+  attendanceLookupLoading: false,
+  attendanceLookupError: false,
+  attendanceSaving: false,
   activities: [],
   attendance: [],
   instruments: [],
@@ -73,6 +80,7 @@ function formData(form) {
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     ...options,
@@ -230,25 +238,48 @@ function renderActivities() {
 }
 
 function renderAttendance() {
-  const rows = state.attendance.map((item) => `
+  $("#attendanceListTitle").textContent = state.authenticated ? "Asistencias registradas" : "Asistencias de esta sesion";
+  const attendance = state.authenticated ? state.attendance : state.publicAttendance;
+  const rows = attendance.map((item) => `
     <tr>
       <td>${formatDate(item.attended_on)}</td>
-      <td>${item.full_name}</td>
+      <td>${escapeAttendanceText(item.full_name)}</td>
       <td>${formatDate(item.birth_date)}</td>
-      <td>${item.activity_name}</td>
-      <td>${item.location || "Sin lugar"}</td>
-      <td>${item.instrument_name || "Sin instrumento"}</td>
-      <td>${item.teacher_name || "Sin profesor"}</td>
+      <td>${escapeAttendanceText(item.activity_name)}</td>
+      <td>${escapeAttendanceText(item.location || "Sin lugar")}</td>
+      <td>${escapeAttendanceText(item.instrument_name || "Sin instrumento")}</td>
+      <td>${escapeAttendanceText(item.teacher_name || "Sin profesor")}</td>
       <td class="row-actions">${actionButtons("attendance", item.id)}</td>
     </tr>
   `);
-  $("#attendanceRows").innerHTML = rows.join("") || emptyRow(8, "No hay asistencias registradas");
+  $("#attendanceRows").innerHTML = rows.join("") || emptyRow(8, state.authenticated ? "No hay asistencias con los filtros seleccionados" : "Sin asistencias registradas en esta sesion");
+}
+
+function escapeAttendanceText(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
+}
+
+function renderAttendanceParticipants() {
+  const select = $('#attendanceForm [name="participant_id"]');
+  const selected = select.value;
+  const placeholder = state.attendanceLookupLoading ? "Buscando participantes..."
+    : state.attendanceLookupError ? "No se pudo cargar la lista"
+    : state.attendanceParticipants.length ? "Seleccionar participante"
+    : !state.authenticated && !$("#attendanceNameSearch").value.trim() ? "Escribe el nombre del participante"
+    : "No se encontraron participantes";
+  select.replaceChildren(new Option(placeholder, ""), ...state.attendanceParticipants.map((participant) =>
+    new Option(`${participant.full_name} - ${formatDate(participant.birth_date)}`, String(participant.id))
+  ));
+  if (state.attendanceParticipants.some((participant) => String(participant.id) === selected)) {
+    select.value = selected;
+  } else if (state.attendanceParticipants.length === 1) {
+    select.value = String(state.attendanceParticipants[0].id);
+  }
+  select.disabled = state.attendanceLookupLoading || state.attendanceSaving;
+  $("#attendanceSubmitButton").disabled = select.disabled || !select.value;
 }
 
 function renderSelects() {
-  const participantOptions = state.participants.map((participant) =>
-    `<option value="${participant.id}">${participant.full_name} - ${formatDate(participant.birth_date)}</option>`
-  );
   const activityOptions = state.activities.map((activity) =>
     `<option value="${activity.id}">${activity.name}${activity.instrument_name ? ` - ${activity.instrument_name}` : ""}${activity.teacher_name ? ` - ${activity.teacher_name}` : ""}</option>`
   );
@@ -262,7 +293,7 @@ function renderSelects() {
     `<option value="${location}">${location}</option>`
   );
 
-  setSelectOptions('[name="participant_id"]', participantOptions.join(""), `<option value="">Sin participantes</option>`);
+  renderAttendanceParticipants();
   setSelectOptions('[name="activity_id"]', activityOptions.join(""), `<option value="">Sin actividades</option>`);
   setSelectOptions('[name="instrument_id"]', instrumentOptions.join(""), "", `<option value="">Sin instrumento</option>`);
   setSelectOptions('#activityForm [name="teacher_id"]', teacherOptions.join(""), "", `<option value="">Sin profesor</option>`);
@@ -356,13 +387,64 @@ async function loadActivities() {
 }
 
 async function loadAttendance() {
+  const request = ++state.attendanceListRequest;
+  if (!state.authenticated) {
+    state.attendance = [];
+    renderAttendance();
+    return;
+  }
   const params = new URLSearchParams();
   if ($("#attendanceActivityFilter")?.value) params.set("activity_id", $("#attendanceActivityFilter").value);
   if ($("#attendanceStudentFilter")?.value) params.set("search", $("#attendanceStudentFilter").value);
   if ($("#attendanceTeacherFilter")?.value) params.set("teacher_id", $("#attendanceTeacherFilter").value);
   if ($("#attendanceFrom")?.value) params.set("from", $("#attendanceFrom").value);
   if ($("#attendanceTo")?.value) params.set("to", $("#attendanceTo").value);
-  state.attendance = await api(`/api/attendance?${params}`);
+  const attendance = await api(`/api/attendance?${params}`);
+  if (request !== state.attendanceListRequest) return;
+  state.attendance = attendance;
+  renderAttendance();
+}
+
+async function loadAttendanceParticipants() {
+  const request = ++state.attendanceLookupRequest;
+  const params = new URLSearchParams();
+  const name = $("#attendanceNameSearch").value.trim();
+  const birthDate = $("#attendanceBirthSearch").value;
+  if (name) params.set("search", name);
+  if (birthDate) params.set("birth_date", birthDate);
+  state.attendanceLookupLoading = true;
+  state.attendanceLookupError = false;
+  renderAttendanceParticipants();
+  try {
+    const participants = !state.authenticated && !name ? [] : await api(`/api/participants?${params}`);
+    if (request !== state.attendanceLookupRequest) return;
+    state.attendanceParticipants = participants;
+  } catch (error) {
+    if (request !== state.attendanceLookupRequest) return;
+    state.attendanceParticipants = [];
+    state.attendanceLookupError = true;
+    toast(error.message);
+  } finally {
+    if (request === state.attendanceLookupRequest) {
+      state.attendanceLookupLoading = false;
+      renderAttendanceParticipants();
+    }
+  }
+}
+
+function clearAttendanceFilters() {
+  ["attendanceStudentFilter", "attendanceActivityFilter", "attendanceTeacherFilter", "attendanceFrom", "attendanceTo"].forEach((id) => {
+    $(`#${id}`).value = "";
+  });
+  return loadAttendance();
+}
+
+function rememberPublicAttendance(saved) {
+  const participant = state.attendanceParticipants.find((item) => String(item.id) === String(saved.participant_id));
+  const activity = state.activities.find((item) => String(item.id) === String(saved.activity_id));
+  const row = { ...saved, birth_date: participant?.birth_date || "", location: activity?.location || "",
+    instrument_name: activity?.instrument_name || "", teacher_name: activity?.teacher_name || "" };
+  state.publicAttendance = [row, ...state.publicAttendance.filter((item) => item.id !== saved.id)].slice(0, 20);
   renderAttendance();
 }
 
@@ -388,6 +470,7 @@ async function refreshAll() {
   await loadTeachers();
   await loadActivities();
   await loadParticipants();
+  await loadAttendanceParticipants();
   if (state.authenticated) {
     await loadAttendance();
     await loadReports();
@@ -477,6 +560,12 @@ function editActivity(activity) {
 
 function editAttendance(attendance) {
   state.editingAttendanceId = attendance.id;
+  $("#attendanceNameSearch").value = attendance.full_name;
+  $("#attendanceBirthSearch").value = attendance.birth_date;
+  if (!state.attendanceParticipants.some((participant) => participant.id === attendance.participant_id)) {
+    state.attendanceParticipants.push({id: attendance.participant_id, full_name: attendance.full_name, birth_date: attendance.birth_date});
+  }
+  renderAttendanceParticipants();
   fillForm($("#attendanceForm"), attendance);
   $("#attendanceSubmitButton").textContent = "Guardar cambios";
   $("#attendanceCancelEdit").classList.remove("hidden");
@@ -623,18 +712,35 @@ function setupForms() {
   $("#attendanceForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
+    if (state.attendanceSaving || state.attendanceLookupLoading) return;
+    const values = formData(form);
+    if (!values.participant_id) {
+      setMessage("#attendanceMessage", "Selecciona un participante antes de registrar la asistencia.", "error");
+      return;
+    }
+    state.attendanceSaving = true;
+    renderAttendanceParticipants();
     try {
       const editing = Boolean(state.editingAttendanceId);
       const result = await api(editing ? `/api/attendance/${state.editingAttendanceId}` : "/api/attendance", {
         method: editing ? "PUT" : "POST",
-        body: JSON.stringify(formData(form)),
+        body: JSON.stringify(values),
       });
-      setMessage("#attendanceMessage", result.existing ? "Esa asistencia ya estaba registrada." : editing ? "Asistencia actualizada." : "Asistencia registrada.");
+      const saved = result.attendance;
+      if (!state.authenticated) rememberPublicAttendance(saved);
+      const message = `${result.existing ? "Asistencia ya registrada" : editing ? "Asistencia actualizada" : "Asistencia registrada"}: ${saved.full_name}, ${formatDate(saved.attended_on)}.`;
+      setMessage("#attendanceMessage", message);
       if (editing) resetAttendanceForm();
       await refreshAll();
+      if (state.authenticated && !state.attendance.some((attendance) => attendance.id === saved.id)) {
+        setMessage("#attendanceMessage", `${message} No aparece en el listado por los filtros activos.`);
+      }
       toast(result.existing ? "Asistencia existente" : editing ? "Asistencia actualizada" : "Asistencia registrada");
     } catch (error) {
       setMessage("#attendanceMessage", error.message, "error");
+    } finally {
+      state.attendanceSaving = false;
+      renderAttendanceParticipants();
     }
   });
 
@@ -654,15 +760,10 @@ function setupFilters() {
     $(`#${id}`).addEventListener("input", loadReports);
   });
   ["attendanceNameSearch", "attendanceBirthSearch"].forEach((id) => {
-    $(`#${id}`).addEventListener("input", async () => {
-      const params = new URLSearchParams();
-      if ($("#attendanceNameSearch").value) params.set("search", $("#attendanceNameSearch").value);
-      if ($("#attendanceBirthSearch").value) params.set("birth_date", $("#attendanceBirthSearch").value);
-      state.participants = await api(`/api/participants?${params}`);
-      renderParticipants();
-      renderSelects();
-    });
+    $(`#${id}`).addEventListener("input", loadAttendanceParticipants);
   });
+  $('#attendanceForm [name="participant_id"]').addEventListener("change", renderAttendanceParticipants);
+  $("#attendanceClearFilters").addEventListener("click", () => clearAttendanceFilters().catch((error) => toast(error.message)));
   ["attendanceStudentFilter", "attendanceActivityFilter", "attendanceTeacherFilter", "attendanceFrom", "attendanceTo"].forEach((id) => {
     $(`#${id}`).addEventListener("input", loadAttendance);
   });
