@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import unicodedata
 import zipfile
+from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -45,9 +46,17 @@ def parse_date(value: str, field: str) -> str:
         raise ValueError(f"{field} debe tener formato AAAA-MM-DD")
 
 
+class DatabaseConnection(sqlite3.Connection):
+    def __exit__(self, *args):
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.close()
+
+
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, factory=DatabaseConnection)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     return db
@@ -114,7 +123,7 @@ def init_db() -> None:
                 FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE,
                 FOREIGN KEY(activity_id) REFERENCES activities(id) ON DELETE CASCADE,
                 FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE SET NULL,
-                UNIQUE(participant_id, activity_id)
+                UNIQUE(participant_id, activity_id, attended_on)
             );
 
             CREATE INDEX IF NOT EXISTS idx_participants_registered_at
@@ -133,6 +142,41 @@ def init_db() -> None:
         ensure_column(db, "participants", "guardian_name", "TEXT DEFAULT ''")
         ensure_column(db, "participants", "health_conditions", "TEXT DEFAULT ''")
         ensure_column(db, "participants", "location", "TEXT DEFAULT ''")
+    migrate_daily_attendance()
+
+
+def migrate_daily_attendance() -> None:
+    with connect() as db:
+        unique_columns = [
+            [column["name"] for column in db.execute(f"PRAGMA index_info('{index['name']}')")]
+            for index in db.execute("PRAGMA index_list(attendance)") if index["unique"]
+        ]
+        if ["participant_id", "activity_id"] not in unique_columns:
+            return
+        backup_path = DB_PATH.with_name(DB_PATH.stem + "-before-daily-attendance.sqlite3")
+        if not backup_path.exists():
+            with closing(sqlite3.connect(backup_path)) as backup:
+                db.backup(backup)
+        db.execute("BEGIN")
+        db.execute("""
+            CREATE TABLE attendance_daily (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                participant_id INTEGER NOT NULL,
+                activity_id INTEGER NOT NULL,
+                teacher_id INTEGER,
+                attended_on TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE,
+                FOREIGN KEY(activity_id) REFERENCES activities(id) ON DELETE CASCADE,
+                FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE SET NULL,
+                UNIQUE(participant_id, activity_id, attended_on)
+            )
+        """)
+        db.execute("INSERT INTO attendance_daily SELECT id, participant_id, activity_id, teacher_id, attended_on, notes, created_at FROM attendance")
+        db.execute("DROP TABLE attendance")
+        db.execute("ALTER TABLE attendance_daily RENAME TO attendance")
+        db.execute("CREATE INDEX idx_attendance_attended_on ON attendance(attended_on)")
 
 
 def ensure_column(db: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
@@ -844,7 +888,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 if not teacher:
                     raise ValueError("Profesor no encontrado")
 
-            attended_on = data.get("attended_on") or activity["activity_date"]
+            attended_on = data.get("attended_on") or today_iso()
             attended_on = parse_date(attended_on, "attended_on")
             try:
                 cursor = db.execute(
@@ -868,10 +912,12 @@ class AppHandler(BaseHTTPRequestHandler):
                     FROM attendance att
                     JOIN participants p ON p.id = att.participant_id
                     JOIN activities a ON a.id = att.activity_id
-                    WHERE participant_id = ? AND activity_id = ?
+                    WHERE participant_id = ? AND activity_id = ? AND attended_on = ?
                     """,
-                    (data["participant_id"], data["activity_id"]),
+                    (data["participant_id"], data["activity_id"], attended_on),
                 ).fetchone()
+                if existing is None:
+                    raise ValueError("No se pudo registrar la asistencia")
                 self.send_json({"attendance": dict(existing), "existing": True}, 200)
                 return
 
@@ -933,7 +979,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     ),
                 )
             except sqlite3.IntegrityError:
-                raise ValueError("Ese participante ya tiene asistencia registrada en esa actividad")
+                raise ValueError("Ese participante ya tiene asistencia en esa actividad y fecha")
             if cursor.rowcount == 0:
                 raise ValueError("Asistencia no encontrada")
             attendance = db.execute(
